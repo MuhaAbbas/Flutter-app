@@ -13,21 +13,40 @@ class AdminMain extends StatefulWidget {
 
 class _AdminMainState extends State<AdminMain> {
   int _index = 0;
+  // Separate navigator key for the More tab so back-presses stay in-tab
+  final _moreNavKey = GlobalKey<NavigatorState>();
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
-      body: IndexedStack(
-        index: _index,
-        children: const [
-          AdminDashboard(),
-          EmployeesScreen(),
-          AttendanceScreen(),
-          MeetingsScreen(),
-          MoreScreen(),
-        ],
-      ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (_index == 4 && (_moreNavKey.currentState?.canPop() ?? false)) {
+          _moreNavKey.currentState!.pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0F172A),
+        body: IndexedStack(
+          index: _index,
+          children: [
+            const AdminDashboard(),
+            const EmployeesScreen(),
+            const AttendanceScreen(),
+            const MeetingsScreen(),
+            // More tab gets its own nested Navigator so sub-screens
+            // push within the tab and the bottom nav stays visible
+            HeroControllerScope(
+              controller: MaterialApp.createMaterialHeroController(),
+              child: Navigator(
+                key: _moreNavKey,
+                onGenerateRoute: (_) => MaterialPageRoute(
+                  builder: (_) => const MoreScreen(),
+                ),
+              ),
+            ),
+          ],
+        ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.08))),

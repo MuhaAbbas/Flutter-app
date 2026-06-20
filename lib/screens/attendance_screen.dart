@@ -1,5 +1,7 @@
+import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../config/api_config.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -98,10 +100,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
   // ── RECORDS TAB ──────────────────────────────────────────────────────────────
 
+  int _countStatus(String s) => _records.where((r) => r['status'] == s).length;
+
   Widget _buildRecordsTab() {
-    final present = _stats['present'] ?? _stats['presentToday'] ?? 0;
-    final absent = _stats['absent'] ?? _stats['absentToday'] ?? 0;
-    final late = _stats['late'] ?? _stats['lateToday'] ?? 0;
+    final present = (_stats['present'] ?? _stats['presentToday']) as int? ?? _countStatus('present');
+    final absent = (_stats['absent'] ?? _stats['absentToday']) as int? ?? _countStatus('absent');
+    final late = (_stats['late'] ?? _stats['lateToday']) as int? ?? _countStatus('late');
     final total = _records.isNotEmpty ? _records.length : (_stats['total'] ?? 0);
 
     return Column(
@@ -157,6 +161,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     final lastName = r['lastName'] ?? r['user']?['lastName'] ?? '';
     final name = r['userName'] ?? '$firstName $lastName'.trim();
     final dept = r['departmentName'] ?? r['department']?['name'] ?? '';
+    final empId = r['employeeId'] ?? r['userEmployeeId'] ?? r['user']?['employeeId'] ?? '';
     final date = _formatDate(r['date']?.toString() ?? '');
     final checkIn = _formatTime(r['checkInTime']?.toString());
     final checkOut = _formatTime(r['checkOutTime']?.toString());
@@ -189,8 +194,25 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name.isEmpty ? 'Unknown' : name,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(name.isEmpty ? 'Unknown' : name,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    if (empId.toString().isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(empId.toString(),
+                            style: const TextStyle(color: Color(0xFF3B82F6), fontSize: 10, fontWeight: FontWeight.bold)),
+                      ),
+                  ],
+                ),
                 Text('${dept.isNotEmpty ? '$dept • ' : ''}$date',
                     style: const TextStyle(color: Colors.white38, fontSize: 11)),
                 const SizedBox(height: 3),
@@ -455,11 +477,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
             subtitle: 'Download as Excel or PDF',
             child: Column(
               children: [
-                _exportBtn('Attendance Records', Icons.people_outline, Colors.green),
+                _exportBtn('Attendance Records', Icons.people_outline, Colors.green, '/attendance/export'),
                 const SizedBox(height: 8),
-                _exportBtn('Activity Logs', Icons.timeline, Colors.orange),
+                _exportBtn('Activity Logs', Icons.timeline, Colors.orange, '/activities/export'),
                 const SizedBox(height: 8),
-                _exportBtn('Payroll Data', Icons.payments_outlined, const Color(0xFF3B82F6)),
+                _exportBtn('Payroll Data', Icons.payments_outlined, const Color(0xFF3B82F6), '/payroll/export'),
               ],
             ),
           ),
@@ -467,18 +489,44 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
           _sectionCard(
             title: 'Import Data',
             subtitle: 'Upload CSV or XLSX to bulk-import records',
-            child: SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => _showSnack('Import not available on mobile'),
-                icon: const Icon(Icons.upload_file, color: Colors.white38),
-                label: const Text('Choose File & Import', style: TextStyle(color: Colors.white38)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.white24),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Required CSV Format:', style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold)),
+                      SizedBox(height: 6),
+                      Text('employeeId, date, checkIn, checkOut, status',
+                          style: TextStyle(color: Color(0xFF3B82F6), fontSize: 11, fontFamily: 'monospace')),
+                      SizedBox(height: 4),
+                      Text('CS0001, 2026-06-01, 09:00, 17:00, present',
+                          style: TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace')),
+                    ],
+                  ),
                 ),
-              ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showSnack('Import available on web dashboard only'),
+                    icon: const Icon(Icons.upload_file, color: Colors.white38),
+                    label: const Text('Use Web Dashboard to Import', style: TextStyle(color: Colors.white38)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.white24),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -507,11 +555,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     );
   }
 
-  Widget _exportBtn(String label, IconData icon, Color color) {
+  Widget _exportBtn(String label, IconData icon, Color color, String endpoint) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        onPressed: () => _showSnack('$label export coming soon'),
+        onPressed: () => _showExportSheet(label, endpoint, color),
         icon: Icon(icon, color: Colors.white, size: 18),
         label: Text('Export $label', style: const TextStyle(color: Colors.white, fontSize: 13)),
         style: ElevatedButton.styleFrom(
@@ -521,6 +569,71 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         ),
       ),
     );
+  }
+
+  void _showExportSheet(String label, String endpoint, Color color) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E293B),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Export $label', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            const Text('Select format to download', style: TextStyle(color: Colors.white38, fontSize: 12)),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showSnack('Opening Excel export...');
+                      // In web, open the URL
+                      _openExportUrl(endpoint, 'xlsx');
+                    },
+                    icon: const Icon(Icons.table_chart, color: Colors.white, size: 18),
+                    label: const Text('Excel (.xlsx)', style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showSnack('Opening PDF export...');
+                      _openExportUrl(endpoint, 'pdf');
+                    },
+                    icon: const Icon(Icons.picture_as_pdf, color: Colors.white, size: 18),
+                    label: const Text('PDF (.pdf)', style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openExportUrl(String endpoint, String format) {
+    final url = '${ApiConfig.baseUrl}$endpoint?format=$format';
+    html.window.open(url, '_blank');
   }
 
   // ── HELPERS ──────────────────────────────────────────────────────────────────

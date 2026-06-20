@@ -208,7 +208,9 @@ class _MeetingsScreenState extends State<MeetingsScreen>
             ? Colors.red
             : Colors.orange;
 
-    return Container(
+    return GestureDetector(
+      onTap: () => _showMeetingDetail(m),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -319,6 +321,128 @@ class _MeetingsScreenState extends State<MeetingsScreen>
             ),
           ),
         ],
+      ),
+      ), // GestureDetector
+    );
+  }
+
+  void _showMeetingDetail(Map<String, dynamic> m) {
+    final empName = m['userName'] ?? m['employeeName'] ??
+        '${m['user']?['firstName'] ?? ''} ${m['user']?['lastName'] ?? ''}'.trim();
+    final from = m['from'] ?? m['fromLocation'] ?? 'Office';
+    final to = m['to'] ?? m['toLocation'] ?? m['destination'] ?? '';
+    final status = (m['status'] ?? 'pending').toString().toLowerCase();
+    final purpose = m['purpose'] ?? m['title'] ?? '';
+    final id = m['id']?.toString() ?? '';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E293B),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          bool acting = false;
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: const Color(0xFF3B82F6).withValues(alpha: 0.2),
+                      child: Text(empName.isNotEmpty ? empName[0].toUpperCase() : '?',
+                          style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(empName, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                          Text('$from → $to', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: (status == 'approved' ? Colors.green : status == 'rejected' ? Colors.red : Colors.orange)
+                            .withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(status[0].toUpperCase() + status.substring(1),
+                          style: TextStyle(
+                            color: status == 'approved' ? Colors.green : status == 'rejected' ? Colors.red : Colors.orange,
+                            fontSize: 11, fontWeight: FontWeight.bold,
+                          )),
+                    ),
+                  ],
+                ),
+                if (purpose.toString().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(purpose.toString(), style: const TextStyle(color: Colors.white54, fontSize: 13)),
+                ],
+                if (status == 'pending' && id.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Divider(color: Colors.white12),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: acting ? null : () async {
+                            setLocal(() => acting = true);
+                            try {
+                              await ApiService().approveLeaveRequest(id);
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              _loadTab(0);
+                            } catch (e) {
+                              if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
+                              setLocal(() => acting = false);
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: const Text('Approve', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: acting ? null : () async {
+                            setLocal(() => acting = true);
+                            try {
+                              await ApiService().cancelMeeting(id);
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              _loadTab(0);
+                            } catch (e) {
+                              if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
+                              setLocal(() => acting = false);
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: const Text('Reject', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 12),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

@@ -135,7 +135,7 @@ class _EmployeesScreenState extends State<EmployeesScreen> with SingleTickerProv
     final empId = e['employeeId'] ?? e['empId'] ?? '';
     final role = e['role']?['name'] ?? e['roleName'] ?? e['role'] ?? '';
     final dept = e['department']?['name'] ?? e['departmentName'] ?? '';
-    final isActive = e['isActive'] ?? true;
+    final isActive = e['isActive'] == true || e['isActive'] == 1;
     final initials = '${firstName.isNotEmpty ? firstName[0] : ''}${lastName.isNotEmpty ? lastName[0] : ''}'.toUpperCase();
 
     final colors = [
@@ -1095,7 +1095,14 @@ class _EmployeesScreenState extends State<EmployeesScreen> with SingleTickerProv
     final overtime = d['overtimeEligible'] ?? false;
     final empCount = d['employeeCount'] ?? d['_count']?['users'] ?? 0;
 
-    return Container(
+    final deptEmployees = _employees.where((e) {
+      final eDept = e['department']?['name']?.toString() ?? e['departmentName']?.toString() ?? '';
+      return eDept == name.toString();
+    }).toList();
+
+    return GestureDetector(
+      onTap: () => _showDeptEmployees(name.toString(), deptEmployees),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1143,6 +1150,99 @@ class _EmployeesScreenState extends State<EmployeesScreen> with SingleTickerProv
             ],
           ),
         ],
+      ),
+    ), // GestureDetector
+    );
+  }
+
+  void _showDeptEmployees(String deptName, List<Map<String, dynamic>> emps) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E293B),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        builder: (_, ctrl) => Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              width: 36, height: 4,
+              decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.people_outline, color: Color(0xFF3B82F6), size: 18),
+                  const SizedBox(width: 8),
+                  Text('$deptName (${emps.length})',
+                      style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+            const Divider(color: Colors.white12, height: 1),
+            Expanded(
+              child: emps.isEmpty
+                  ? const Center(child: Text('No employees', style: TextStyle(color: Colors.white38)))
+                  : ListView.builder(
+                      controller: ctrl,
+                      padding: const EdgeInsets.all(12),
+                      itemCount: emps.length,
+                      itemBuilder: (_, i) {
+                        final e = emps[i];
+                        final firstName = (e['firstName'] ?? '').toString();
+                        final lastName = (e['lastName'] ?? '').toString();
+                        final name = '$firstName $lastName'.trim();
+                        final empId = e['employeeId'] ?? e['empId'] ?? '';
+                        final email = e['email'] ?? '';
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 16,
+                                backgroundColor: const Color(0xFF3B82F6).withValues(alpha: 0.2),
+                                child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                    style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold, fontSize: 12)),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(name.isEmpty ? email : name,
+                                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+                                    if (email.isNotEmpty)
+                                      Text(email, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                                  ],
+                                ),
+                              ),
+                              if (empId.toString().isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(empId.toString(),
+                                      style: const TextStyle(color: Color(0xFF3B82F6), fontSize: 10, fontWeight: FontWeight.bold)),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -10,6 +10,7 @@ class SalarySetupScreen extends StatefulWidget {
 class _SalarySetupScreenState extends State<SalarySetupScreen> {
   List<Map<String, dynamic>> _setups = [];
   bool _loading = true;
+  String? _error;
   final _searchCtrl = TextEditingController();
   String _search = '';
 
@@ -26,9 +27,13 @@ class _SalarySetupScreenState extends State<SalarySetupScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
-    final data = await ApiService().getSalarySetups(search: _search.isNotEmpty ? _search : null);
-    if (mounted) setState(() { _setups = data; _loading = false; });
+    setState(() { _loading = true; _error = null; });
+    try {
+      final data = await ApiService().getSalarySetupsWithError(search: _search.isNotEmpty ? _search : null);
+      if (mounted) setState(() { _setups = data; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString().replaceFirst('Exception: ', ''); _loading = false; });
+    }
   }
 
   Future<void> _delete(String id, String name) async {
@@ -94,18 +99,34 @@ class _SalarySetupScreenState extends State<SalarySetupScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)))
-                : _setups.isEmpty
-                    ? const Center(
-                        child: Text('No salary setups found',
-                            style: TextStyle(color: Colors.white38)))
-                    : RefreshIndicator(
-                        onRefresh: _load,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                          itemCount: _setups.length,
-                          itemBuilder: (_, i) => _setupCard(_setups[i]),
+                : _error != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.error_outline, color: Colors.red, size: 40),
+                              const SizedBox(height: 12),
+                              Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13), textAlign: TextAlign.center),
+                              const SizedBox(height: 12),
+                              TextButton(onPressed: _load, child: const Text('Retry', style: TextStyle(color: Color(0xFF3B82F6)))),
+                            ],
+                          ),
                         ),
-                      ),
+                      )
+                    : _setups.isEmpty
+                        ? const Center(
+                            child: Text('No salary setups found',
+                                style: TextStyle(color: Colors.white38)))
+                        : RefreshIndicator(
+                            onRefresh: _load,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                              itemCount: _setups.length,
+                              itemBuilder: (_, i) => _setupCard(_setups[i]),
+                            ),
+                          ),
           ),
         ],
       ),

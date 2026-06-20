@@ -204,33 +204,28 @@ class _SendNotificationScreenState extends State<SendNotificationScreen> {
                 style: TextStyle(color: Colors.white38, fontSize: 12)),
             const SizedBox(height: 20),
 
-            // Type + Audience
-            Row(
-              children: [
-                Expanded(child: _field(
-                  label: 'Type',
-                  child: _dropdownField(
-                    value: _type,
-                    items: const [
-                      DropdownMenuItem(value: 'notification', child: Text('Notification')),
-                      DropdownMenuItem(value: 'task', child: Text('Task')),
-                    ],
-                    onChanged: (v) { if (v != null) setState(() => _type = v); },
-                  ),
-                )),
-                const SizedBox(width: 12),
-                Expanded(child: _field(
-                  label: 'Audience',
-                  child: _dropdownField(
-                    value: _audience,
-                    items: const [
-                      DropdownMenuItem(value: 'all', child: Text('All employees')),
-                      DropdownMenuItem(value: 'individual', child: Text('Individual')),
-                    ],
-                    onChanged: (v) { if (v != null) setState(() => _audience = v); },
-                  ),
-                )),
-              ],
+            // Type toggle
+            _field(
+              label: 'Type',
+              child: Row(
+                children: [
+                  _typeChip('notification', Icons.notifications_outlined, 'Notification'),
+                  const SizedBox(width: 8),
+                  _typeChip('task', Icons.task_alt_outlined, 'Task'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            // Audience toggle
+            _field(
+              label: 'Audience',
+              child: Row(
+                children: [
+                  _audienceChip('all', 'All Employees'),
+                  const SizedBox(width: 8),
+                  _audienceChip('individual', 'Individual'),
+                ],
+              ),
             ),
             const SizedBox(height: 14),
 
@@ -372,28 +367,51 @@ class _SendNotificationScreenState extends State<SendNotificationScreen> {
     );
   }
 
-  Widget _dropdownField<T>({
-    required T value,
-    required List<DropdownMenuItem<T>> items,
-    required void Function(T?) onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: value,
-          isExpanded: true,
-          dropdownColor: const Color(0xFF1E293B),
-          style: const TextStyle(color: Colors.white, fontSize: 13),
-          iconEnabledColor: Colors.white38,
-          items: items,
-          onChanged: onChanged,
+  Widget _typeChip(String value, IconData icon, String label) {
+    final selected = _type == value;
+    return GestureDetector(
+      onTap: () => setState(() => _type = value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF3B82F6) : const Color(0xFF1E293B),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: selected ? const Color(0xFF3B82F6) : Colors.white12),
         ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: selected ? Colors.white : Colors.white38),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(
+              color: selected ? Colors.white : Colors.white38,
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+            )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _audienceChip(String value, String label) {
+    final selected = _audience == value;
+    return GestureDetector(
+      onTap: () => setState(() => _audience = value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF0F766E) : const Color(0xFF1E293B),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: selected ? const Color(0xFF0F766E) : Colors.white12),
+        ),
+        child: Text(label, style: TextStyle(
+          color: selected ? Colors.white : Colors.white38,
+          fontSize: 13,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+        )),
       ),
     );
   }

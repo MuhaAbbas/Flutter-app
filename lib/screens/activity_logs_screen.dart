@@ -12,6 +12,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
   List<Map<String, dynamic>> _employees = [];
   List<Map<String, dynamic>> _departments = [];
   bool _loading = true;
+  String? _error;
 
   String _selectedUserId = 'all';
   String _selectedDeptId = 'all';
@@ -42,14 +43,18 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
   }
 
   Future<void> _loadLogs() async {
-    setState(() => _loading = true);
-    final data = await ApiService().getActivityLogs(
-      userId: _selectedUserId,
-      departmentId: _selectedDeptId,
-      month: _month,
-      year: _year,
-    );
-    if (mounted) setState(() { _logs = data; _loading = false; });
+    setState(() { _loading = true; _error = null; });
+    try {
+      final data = await ApiService().getActivityLogsWithError(
+        userId: _selectedUserId,
+        departmentId: _selectedDeptId,
+        month: _month,
+        year: _year,
+      );
+      if (mounted) setState(() { _logs = data; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString().replaceFirst('Exception: ', ''); _loading = false; });
+    }
   }
 
   void _prevMonth() {
@@ -86,6 +91,22 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)))
+                : _error != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.error_outline, color: Colors.red, size: 40),
+                              const SizedBox(height: 12),
+                              Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13), textAlign: TextAlign.center),
+                              const SizedBox(height: 12),
+                              TextButton(onPressed: _loadLogs, child: const Text('Retry', style: TextStyle(color: Color(0xFF3B82F6)))),
+                            ],
+                          ),
+                        ),
+                      )
                 : _logs.isEmpty
                     ? _emptyState()
                     : RefreshIndicator(
