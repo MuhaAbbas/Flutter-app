@@ -89,6 +89,7 @@ class _AdminMainState extends State<AdminMain> {
           ],
         ),
       ),
+      ),
     );
   }
 }
