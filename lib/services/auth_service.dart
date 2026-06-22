@@ -48,13 +48,26 @@ class AuthService {
       final dio = Dio(BaseOptions(
         baseUrl: ApiConfig.baseUrl,
         headers: {'Authorization': 'Bearer $token'},
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
       ));
       final response = await dio.get(ApiConfig.me);
-      _currentUser = User.fromJson(response.data['data']);
+      final data = response.data?['data'] ?? response.data;
+      if (data is Map<String, dynamic>) {
+        _currentUser = User.fromJson(data);
+      }
+      return true;
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      // Only clear token on explicit auth rejection; network/timeout keeps session alive
+      if (status == 401 || status == 403) {
+        await logout();
+        return false;
+      }
       return true;
     } catch (_) {
-      await logout();
-      return false;
+      // Parse error or other — keep token, proceed as logged in
+      return true;
     }
   }
 

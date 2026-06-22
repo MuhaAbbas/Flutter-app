@@ -172,10 +172,19 @@ class ApiService {
 
   Future<List<Map<String, dynamic>>> getEmployees() async {
     try {
-      final response = await _dio.get('/users', queryParameters: {'limit': 200});
-      return _list(response.data, ['users', 'employees', 'items', 'members', 'records']);
+      final response = await _dio.get('/users', queryParameters: {'limit': 200, 'page': 1});
+      final result = _list(response.data,
+          ['users', 'employees', 'items', 'members', 'records', 'data', 'rows', 'results', 'list']);
+      if (result.isEmpty) {
+        // Surface the raw response structure so we know which key to add
+        final raw = response.data;
+        final hint = raw is Map ? 'keys=${(raw as Map).keys.toList()}'
+            : 'type=${raw.runtimeType}';
+        throw Exception('No employees found. Response: $hint');
+      }
+      return result;
     } catch (e) {
-      throw Exception('Failed to load employees: ${_err(e)}');
+      throw Exception('${_err(e)}');
     }
   }
 
@@ -194,9 +203,17 @@ class ApiService {
   Future<List<Map<String, dynamic>>> getDepartments() async {
     try {
       final response = await _dio.get('/departments');
-      return _list(response.data, ['departments', 'items', 'records']);
+      final result = _list(response.data,
+          ['departments', 'items', 'records', 'data', 'rows', 'results', 'list']);
+      if (result.isEmpty) {
+        final raw = response.data;
+        final hint = raw is Map ? 'keys=${(raw as Map).keys.toList()}'
+            : 'type=${raw.runtimeType}';
+        throw Exception('No departments found. Response: $hint');
+      }
+      return result;
     } catch (e) {
-      throw Exception('Failed to load departments: ${_err(e)}');
+      throw Exception('${_err(e)}');
     }
   }
 

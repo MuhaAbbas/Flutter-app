@@ -137,12 +137,21 @@ class _EmployeesTabState extends State<_EmployeesTab> {
   }
 
   Widget _card(Map<String, dynamic> e) {
-    final name = '${e['firstName'] ?? ''} ${e['lastName'] ?? ''}'.trim();
-    final empId = e['employeeId'] ?? '';
-    final dept = e['department']?['name'] ?? e['departmentName'] ?? '';
-    final role = e['role']?['name'] ?? e['designation'] ?? '';
-    final isActive = e['isActive'] == true || e['isActive'] == 1;
-    final email = e['email'] ?? '';
+    // Multiple field-name variants for each field
+    String name = '${e['firstName'] ?? e['first_name'] ?? ''} ${e['lastName'] ?? e['last_name'] ?? ''}'.trim();
+    if (name.isEmpty) name = (e['name'] ?? e['fullName'] ?? e['displayName'] ?? '').toString().trim();
+
+    final empId = (e['employeeId'] ?? e['empId'] ?? e['employeeCode'] ?? e['emp_id'] ?? e['employee_id'] ?? '').toString();
+
+    final deptObj = e['department'] is Map ? e['department'] as Map : null;
+    final dept = (deptObj?['name'] ?? e['departmentName'] ?? e['dept_name'] ?? '').toString();
+
+    final roleObj = e['role'] is Map ? e['role'] as Map : null;
+    final role = (roleObj?['name'] ?? e['roleName'] ?? e['designation'] ?? e['position'] ?? (e['role'] is String ? e['role'] : '')).toString();
+
+    final isActive = e['isActive'] == true || e['isActive'] == 1 ||
+        e['status']?.toString().toLowerCase() == 'active';
+    final email = (e['email'] ?? '').toString();
     final cs = [AppTheme.primary, AppTheme.secondary, const Color(0xFFC084FC), const Color(0xFFFBBF24)];
     final ac = cs[name.isNotEmpty ? name.codeUnitAt(0) % cs.length : 0];
     return SectionCard(
@@ -215,9 +224,11 @@ class _DepartmentsTabState extends State<_DepartmentsTab> {
     }
   }
 
-  int _count(dynamic id) => _employees.where((e) =>
-    e['department']?['id']?.toString() == id?.toString() ||
-    e['departmentId']?.toString() == id?.toString()).length;
+  int _count(dynamic id) => _employees.where((e) {
+    final dObj = e['department'] is Map ? e['department'] as Map : null;
+    final dId = dObj?['id'] ?? dObj?['_id'] ?? e['departmentId'];
+    return dId?.toString() == id?.toString();
+  }).length;
 
   @override
   Widget build(BuildContext context) {
@@ -230,8 +241,9 @@ class _DepartmentsTabState extends State<_DepartmentsTab> {
       itemCount: _depts.length,
       itemBuilder: (_, i) {
         final d = _depts[i];
-        final name = d['name'] ?? '';
-        final count = _count(d['id']);
+        final name = (d['name'] ?? d['departmentName'] ?? d['title'] ?? '').toString();
+        final deptId = d['id'] ?? d['_id'] ?? d['departmentId'];
+        final count = _count(deptId);
         final color = colors[i % colors.length];
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
