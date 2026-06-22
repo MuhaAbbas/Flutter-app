@@ -20,6 +20,47 @@ class ApiService {
         receiveTimeout: const Duration(seconds: 10),
       ));
 
+  // ── Response parsing helpers ─────────────────────────────────────────────────
+
+  // Unwraps {data: ...} or returns raw if no wrapper
+  dynamic _d(dynamic raw) {
+    if (raw is! Map) return raw;
+    return raw['data'] ?? raw;
+  }
+
+  // Extracts a List from wrapped/unwrapped response trying multiple key names
+  List<Map<String, dynamic>> _list(dynamic raw, List<String> keys) {
+    final d = _d(raw);
+    if (d is List) {
+      try { return d.cast<Map<String, dynamic>>(); } catch (_) { return []; }
+    }
+    if (d is Map) {
+      for (final k in keys) {
+        final v = d[k];
+        if (v is List) {
+          try { return v.cast<Map<String, dynamic>>(); } catch (_) {}
+        }
+      }
+      // Last resort: any non-empty List value in the map
+      for (final v in d.values) {
+        if (v is List && v.isNotEmpty) {
+          try { return v.cast<Map<String, dynamic>>(); } catch (_) {}
+        }
+      }
+    }
+    return [];
+  }
+
+  // Clean error message from DioException or generic exception
+  String _err(dynamic e) {
+    if (e is DioException) {
+      return e.response?.data?['message']?.toString()
+          ?? e.response?.data?['error']?.toString()
+          ?? 'HTTP ${e.response?.statusCode ?? 'error'}';
+    }
+    return e.toString().replaceFirst('Exception: ', '');
+  }
+
   // ── VISITS ──────────────────────────────────────────────────────────────────
 
   Future<List<MeetingRequest>> getMyVisits() async {
@@ -131,12 +172,10 @@ class ApiService {
 
   Future<List<Map<String, dynamic>>> getEmployees() async {
     try {
-      final response = await _dio.get('/users?limit=100');
-      final data = response.data['data'];
-      final List list = data is List ? data : (data?['users'] ?? data?['items'] ?? []);
-      return list.cast<Map<String, dynamic>>();
-    } catch (_) {
-      return [];
+      final response = await _dio.get('/users', queryParameters: {'limit': 200});
+      return _list(response.data, ['users', 'employees', 'items', 'members', 'records']);
+    } catch (e) {
+      throw Exception('Failed to load employees: ${_err(e)}');
     }
   }
 
@@ -155,10 +194,9 @@ class ApiService {
   Future<List<Map<String, dynamic>>> getDepartments() async {
     try {
       final response = await _dio.get('/departments');
-      final List data = response.data['data'] ?? [];
-      return data.cast<Map<String, dynamic>>();
-    } catch (_) {
-      return [];
+      return _list(response.data, ['departments', 'items', 'records']);
+    } catch (e) {
+      throw Exception('Failed to load departments: ${_err(e)}');
     }
   }
 
@@ -167,8 +205,7 @@ class ApiService {
   Future<List<Map<String, dynamic>>> getRoles() async {
     try {
       final response = await _dio.get('/roles');
-      final List data = response.data['data'] ?? [];
-      return data.cast<Map<String, dynamic>>();
+      return _list(response.data, ['roles', 'items', 'records']);
     } catch (_) {
       return [];
     }
@@ -177,18 +214,22 @@ class ApiService {
   // ── ATTENDANCE ALL (Admin) ───────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> getAttendanceAll({String? from, String? to, String? status}) async {
-    try {
-      final params = <String, String>{};
-      if (from != null) params['from'] = from;
-      if (to != null) params['to'] = to;
-      if (status != null && status != 'all') params['status'] = status;
-      final response = await _dio.get('/attendance', queryParameters: params);
-      final data = response.data['data'];
-      if (data is List) return {'records': data};
-      return data as Map<String, dynamic>? ?? {};
-    } catch (_) {
-      return {};
+    final params = <String, dynamic>{};
+    // Send multiple param name variants so the server picks what it understands
+    if (from != null) { params['from'] = from; params['startDate'] = from; params['date'] = from; }
+    if (to != null)   { params['to'] = to;   params['endDate'] = to; }
+    if (status != null && status != 'all') params['status'] = status;
+    final response = await _dio.get('/attendance', queryParameters: params);
+    final d = _d(response.data);
+    if (d is List) return {'records': d.cast<Map<String, dynamic>>(), 'stats': {}};
+    if (d is Map) {
+      final records = d['records'] ?? d['attendance'] ?? d['data'] ?? d['items'] ?? [];
+      return {
+        'records': records is List ? records.cast<Map<String, dynamic>>() : <Map<String, dynamic>>[],
+        'stats':   d['stats'] ?? d['summary'] ?? {},
+      };
     }
+    return {'records': <Map<String, dynamic>>[], 'stats': {}};
   }
 
   // ── ATTENDANCE REQUESTS ──────────────────────────────────────────────────────
@@ -198,9 +239,7 @@ class ApiService {
       final params = <String, String>{};
       if (status != null && status != 'all') params['status'] = status;
       final response = await _dio.get('/attendance-requests', queryParameters: params);
-      final data = response.data['data'];
-      final List list = data is List ? data : (data?['requests'] ?? data?['items'] ?? []);
-      return list.cast<Map<String, dynamic>>();
+      return _list(response.data, ['requests', 'attendanceRequests', 'items', 'records']);
     } catch (_) {
       return [];
     }
@@ -229,9 +268,7 @@ class ApiService {
       final params = <String, String>{};
       if (status != null && status != 'all') params['status'] = status;
       final response = await _dio.get('/leaves', queryParameters: params);
-      final data = response.data['data'];
-      final List list = data is List ? data : (data?['leaves'] ?? data?['items'] ?? []);
-      return list.cast<Map<String, dynamic>>();
+      return _list(response.data, ['leaves', 'leaveRequests', 'items', 'records']);
     } catch (_) {
       return [];
     }
@@ -376,11 +413,9 @@ class ApiService {
       final params = <String, String>{};
       if (status != null && status != 'all') params['status'] = status;
       final response = await _dio.get('/meetings', queryParameters: params);
-      final data = response.data['data'];
-      final List list = data is List ? data : (data?['meetings'] ?? data?['items'] ?? []);
-      return list.cast<Map<String, dynamic>>();
-    } catch (_) {
-      return [];
+      return _list(response.data, ['meetings', 'requests', 'items', 'records', 'data']);
+    } catch (e) {
+      throw Exception('Failed to load meetings: ${_err(e)}');
     }
   }
 
@@ -400,16 +435,13 @@ class ApiService {
   Future<List<Map<String, dynamic>>> getActivityLogsWithError({
     String? userId, String? departmentId, int? month, int? year,
   }) async {
-    final params = <String, String>{};
+    final params = <String, dynamic>{};
     if (userId != null && userId != 'all') params['userId'] = userId;
-    if (departmentId != null && departmentId != 'all') params['department'] = departmentId;
+    if (departmentId != null && departmentId != 'all') { params['department'] = departmentId; params['departmentId'] = departmentId; }
     if (month != null) params['month'] = month.toString();
     if (year != null) params['year'] = year.toString();
     final response = await _dio.get('/activities', queryParameters: params);
-    final data = response.data['data'];
-    final List list = data is List ? data
-        : (data?['activities'] ?? data?['logs'] ?? data?['items'] ?? []);
-    return list.cast<Map<String, dynamic>>();
+    return _list(response.data, ['activities', 'activityLogs', 'logs', 'items', 'records']);
   }
 
   // ── PAYROLL ───────────────────────────────────────────────────────────────────
@@ -417,19 +449,22 @@ class ApiService {
   Future<Map<String, dynamic>> getPayroll({
     String? userId, int? month, int? year, String? status,
   }) async {
-    try {
-      final params = <String, String>{};
-      if (userId != null && userId != 'all') params['userId'] = userId;
-      if (month != null) params['month'] = month.toString();
-      if (year != null) params['year'] = year.toString();
-      if (status != null && status != 'all') params['status'] = status;
-      final response = await _dio.get('/payroll', queryParameters: params);
-      final data = response.data['data'];
-      if (data is List) return {'records': data, 'stats': {}};
-      return data as Map<String, dynamic>? ?? {};
-    } catch (_) {
-      return {};
+    final params = <String, dynamic>{};
+    if (userId != null && userId != 'all') params['userId'] = userId;
+    if (month != null) params['month'] = month.toString();
+    if (year != null) params['year'] = year.toString();
+    if (status != null && status != 'all') params['status'] = status;
+    final response = await _dio.get('/payroll', queryParameters: params);
+    final d = _d(response.data);
+    if (d is List) return {'records': d.cast<Map<String, dynamic>>(), 'stats': {}};
+    if (d is Map) {
+      final records = d['records'] ?? d['payrolls'] ?? d['data'] ?? d['items'] ?? [];
+      return {
+        'records': records is List ? records.cast<Map<String, dynamic>>() : <Map<String, dynamic>>[],
+        'stats':   d['stats'] ?? d['summary'] ?? {},
+      };
     }
+    return {'records': <Map<String, dynamic>>[], 'stats': {}};
   }
 
   Future<void> runPayroll({int? month, int? year, String? userId}) async {
@@ -493,11 +528,19 @@ class ApiService {
   Future<List<Map<String, dynamic>>> getSalarySetupsWithError({String? search}) async {
     final params = <String, String>{};
     if (search != null && search.isNotEmpty) params['search'] = search;
-    final response = await _dio.get('/salary-setup', queryParameters: params);
-    final data = response.data['data'];
-    final List list = data is List ? data
-        : (data?['setups'] ?? data?['salarySetups'] ?? data?['items'] ?? []);
-    return list.cast<Map<String, dynamic>>();
+    // Try plural endpoint first (more RESTful), then singular
+    final endpoints = ['/salary-setups', '/salary-setup', '/salaries/setup'];
+    dynamic lastErr;
+    for (final ep in endpoints) {
+      try {
+        final response = await _dio.get(ep, queryParameters: params);
+        return _list(response.data, ['setups', 'salarySetups', 'salaries', 'items', 'records']);
+      } catch (e) {
+        lastErr = e;
+        if (e is DioException && (e.response?.statusCode ?? 0) != 404) rethrow;
+      }
+    }
+    throw Exception('Salary setup endpoint not found: ${_err(lastErr)}');
   }
 
   Future<Map<String, dynamic>> getSalarySetupByUser(String userId) async {

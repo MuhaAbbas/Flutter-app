@@ -21,14 +21,18 @@ class AdminMain extends StatefulWidget {
 class _AdminMainState extends State<AdminMain> {
   int _index = 0;
   bool _extended = false;
+  bool _showMore = false;
   final _attendanceFilter = ValueNotifier<String>('all');
 
-  static const _destinations = [
+  static const _primaryDest = [
     (icon: Icons.dashboard_outlined, active: Icons.dashboard, label: 'Dashboard'),
     (icon: Icons.people_outline, active: Icons.people, label: 'Employees'),
     (icon: Icons.event_note_outlined, active: Icons.event_note, label: 'Attendance'),
     (icon: Icons.location_on_outlined, active: Icons.location_on, label: 'Meetings'),
     (icon: Icons.bar_chart_outlined, active: Icons.bar_chart, label: 'Activity'),
+  ];
+
+  static const _secondaryDest = [
     (icon: Icons.payments_outlined, active: Icons.payments, label: 'Payroll'),
     (icon: Icons.settings_outlined, active: Icons.settings, label: 'Salary Setup'),
     (icon: Icons.notifications_outlined, active: Icons.notifications, label: 'Notify'),
@@ -93,10 +97,15 @@ class _AdminMainState extends State<AdminMain> {
           _railHeader(),
           const SizedBox(height: 8),
           Expanded(
-            child: ListView.builder(
+            child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 4),
-              itemCount: _destinations.length,
-              itemBuilder: (_, i) => _railItem(i),
+              children: [
+                ..._primaryDest.asMap().entries.map((e) => _railItem(e.key, e.value)),
+                const SizedBox(height: 4),
+                _moreToggle(),
+                if (_showMore || _index >= 5)
+                  ..._secondaryDest.asMap().entries.map((e) => _railItem(5 + e.key, e.value)),
+              ],
             ),
           ),
           const Divider(color: AppTheme.divider, height: 1),
@@ -142,8 +151,35 @@ class _AdminMainState extends State<AdminMain> {
     );
   }
 
-  Widget _railItem(int i) {
-    final d = _destinations[i];
+  Widget _moreToggle() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: GestureDetector(
+        onTap: () => setState(() => _showMore = !_showMore),
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: _extended ? 12 : 8, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceElevated,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisAlignment: _extended ? MainAxisAlignment.start : MainAxisAlignment.center,
+            children: [
+              Icon(_showMore ? Icons.expand_less : Icons.expand_more,
+                  color: AppTheme.textSecondary, size: 20),
+              if (_extended) ...[
+                const SizedBox(width: 10),
+                Text('More', style: GoogleFonts.inter(
+                    color: AppTheme.textSecondary, fontSize: 13)),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _railItem(int i, ({IconData icon, IconData active, String label}) d) {
     final selected = _index == i;
     return Tooltip(
       message: _extended ? '' : d.label,

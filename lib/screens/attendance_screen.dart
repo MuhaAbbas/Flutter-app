@@ -38,9 +38,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         title: 'Attendance',
         bottomHeight: 44,
         bottom: CustomTabBar(
-          tabs: const ['Records', 'Corrections', 'Leave Requests', 'Import / Export'],
+          tabs: const ['Records', 'Att. Requests', 'Leave Requests', 'Import / Export'],
           controller: _tab,
-          isScrollable: true,
+          isScrollable: false,
         ),
       ),
       body: TabBarView(
