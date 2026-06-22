@@ -37,9 +37,7 @@ class _SalarySetupScreenState extends State<SalarySetupScreen> {
     } catch (e) {
       final msg = e.toString();
       if (mounted) setState(() {
-        _error = msg.contains('404')
-            ? 'Salary setup records not found (404). Please ensure the endpoint is configured on the server.'
-            : msg.replaceFirst('Exception: ', '').replaceFirst('DioException [bad response]: ', '');
+        _error = msg.replaceFirst('Exception: ', '').replaceFirst('DioException [bad response]: ', '');
         _loading = false;
       });
     }

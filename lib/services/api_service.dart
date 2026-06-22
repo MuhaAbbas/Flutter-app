@@ -554,44 +554,77 @@ class ApiService {
     }
   }
 
+  // Tries every plausible salary endpoint; stops at first 200, throws on last 404.
+  // When found, caches the working path so subsequent calls skip the probe loop.
+  static String? _salaryEndpoint;
+
   Future<List<Map<String, dynamic>>> getSalarySetupsWithError({String? search}) async {
     final params = <String, String>{};
     if (search != null && search.isNotEmpty) params['search'] = search;
-    // Try plural endpoint first (more RESTful), then singular
-    final endpoints = ['/salary-setups', '/salary-setup', '/salaries/setup'];
+
+    final endpoints = _salaryEndpoint != null
+        ? [_salaryEndpoint!]
+        : [
+            '/salary-setups',
+            '/salary-setup',
+            '/salaries/setup',
+            '/salary',
+            '/salaries',
+            '/payroll/setup',
+            '/payroll-setup',
+            '/salary-structures',
+            '/employee-salaries',
+            '/payroll/salary-setup',
+          ];
+
     dynamic lastErr;
     for (final ep in endpoints) {
       try {
         final response = await _dio.get(ep, queryParameters: params);
-        return _list(response.data, ['setups', 'salarySetups', 'salaries', 'items', 'records']);
+        _salaryEndpoint = ep; // cache working endpoint
+        return _list(response.data,
+            ['setups', 'salarySetups', 'salaries', 'items', 'records', 'data', 'structures']);
       } catch (e) {
         lastErr = e;
         if (e is DioException && (e.response?.statusCode ?? 0) != 404) rethrow;
       }
     }
-    throw Exception('Salary setup endpoint not found: ${_err(lastErr)}');
+    throw Exception(
+        'Salary setup not available on this server (all endpoints returned 404). '
+        'Please check with your backend developer which route to use.');
   }
 
   Future<Map<String, dynamic>> getSalarySetupByUser(String userId) async {
+    final base = _salaryEndpoint ?? '/salary-setup';
     try {
-      final response = await _dio.get('/salary-setup/$userId');
-      return response.data['data'] as Map<String, dynamic>? ?? {};
+      final response = await _dio.get('$base/$userId');
+      final d = _d(response.data);
+      return d is Map<String, dynamic> ? d : {};
     } catch (_) {
       return {};
     }
   }
 
   Future<void> saveSalarySetup(String userId, Map<String, dynamic> data) async {
+    final base = _salaryEndpoint ?? '/salary-setup';
     try {
-      await _dio.post('/salary-setup/$userId', data: data);
+      // POST to base (creates) or PATCH to base/userId (updates)
+      try {
+        await _dio.patch('$base/$userId', data: data);
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 404) {
+          await _dio.post(base, data: {...data, 'userId': userId});
+        } else rethrow;
+      }
     } on DioException catch (e) {
       throw Exception(e.response?.data?['message'] ?? 'Failed to save salary setup');
     }
   }
 
   Future<void> deleteSalarySetup(String id) async {
+    final base = _salaryEndpoint ?? '/salary-setup';
     try {
-      await _dio.delete('/salary-setup/$id');
+      await _dio.delete('$base/$id');
     } on DioException catch (e) {
       throw Exception(e.response?.data?['message'] ?? 'Failed to delete');
     }
