@@ -66,22 +66,38 @@ class _RecordsTab extends StatefulWidget {
 }
 
 class _RecordsTabState extends State<_RecordsTab> {
-  List<Map<String, dynamic>> _records = [];
+  List<Map<String, dynamic>> _records = [], _employees = [], _depts = [];
   Map<String, dynamic> _stats = {};
   bool _loading = true;
   String? _error;
-  DateTime _date = DateTime.now();
+  DateTime _from = DateTime.now().subtract(const Duration(days: 7));
+  DateTime _to = DateTime.now();
+  String _empId = 'all';
+  String _deptId = 'all';
   String _statusFilter = 'all';
 
-  List<Map<String, dynamic>> get _visible => _statusFilter == 'all'
-      ? _records
-      : _records.where((r) => (r['status'] ?? '').toString().toLowerCase() == _statusFilter).toList();
+  List<Map<String, dynamic>> get _visible {
+    return _records.where((r) {
+      bool stOk = _statusFilter == 'all' || (r['status'] ?? '').toString().toLowerCase() == _statusFilter;
+      bool eOk = _empId == 'all';
+      if (!eOk) {
+        final rEmp = r['user']?['id']?.toString() ?? r['userId']?.toString() ?? r['user']?['_id']?.toString();
+        eOk = rEmp == _empId;
+      }
+      bool dOk = _deptId == 'all';
+      if (!dOk) {
+        final rDept = r['user']?['department']?['id']?.toString() ?? r['user']?['department']?['_id']?.toString() ?? r['departmentId']?.toString();
+        dOk = rDept == _deptId;
+      }
+      return stOk && eOk && dOk;
+    }).toList();
+  }
 
   @override
   void initState() {
     super.initState();
     widget.filterNotifier?.addListener(_onExternalFilter);
-    _load();
+    _loadAll();
   }
 
   void _onExternalFilter() {
@@ -95,11 +111,35 @@ class _RecordsTabState extends State<_RecordsTab> {
     super.dispose();
   }
 
+  Future<void> _loadAll() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final fromStr = DateFormat('yyyy-MM-dd').format(_from);
+      final toStr = DateFormat('yyyy-MM-dd').format(_to);
+      final results = await Future.wait([
+        ApiService().getAttendanceAll(from: fromStr, to: toStr),
+        ApiService().getEmployees(),
+        ApiService().getDepartments(),
+      ]);
+      if (mounted) setState(() {
+        final raw = (results[0] as Map)['records'] ?? (results[0] as Map)['data'] ?? (results[0] as Map)['attendance'] ?? [];
+        _records = raw is List ? raw.cast<Map<String, dynamic>>() : [];
+        _stats = (results[0] as Map)['stats'] ?? (results[0] as Map)['summary'] ?? {};
+        _employees = results[1] as List<Map<String, dynamic>>;
+        _depts = results[2] as List<Map<String, dynamic>>;
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final dateStr = DateFormat('yyyy-MM-dd').format(_date);
-      final result = await ApiService().getAttendanceAll(from: dateStr, to: dateStr);
+      final fromStr = DateFormat('yyyy-MM-dd').format(_from);
+      final toStr = DateFormat('yyyy-MM-dd').format(_to);
+      final result = await ApiService().getAttendanceAll(from: fromStr, to: toStr);
       if (mounted) setState(() {
         final raw = result['records'] ?? result['data'] ?? result['attendance'] ?? [];
         _records = raw is List ? raw.cast<Map<String, dynamic>>() : [];
@@ -111,192 +151,260 @@ class _RecordsTabState extends State<_RecordsTab> {
     }
   }
 
+  void _clearFilters() => setState(() { _empId = 'all'; _deptId = 'all'; _statusFilter = 'all'; });
+
   int _cnt(String s) => _records.where((r) => (r['status'] ?? '').toString().toLowerCase() == s).length;
 
   @override
   Widget build(BuildContext context) {
     return Column(children: [
-      _dateBar(),
-      if (!_loading && _error == null) _statsRow(),
+      _filterBar(),
+      if (!_loading && _error == null) _statCards(),
       Expanded(child: _body()),
     ]);
   }
 
-  Widget _dateBar() {
-    return Container(
-      color: AppTheme.surface,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(children: [
-        IconButton(
-          onPressed: () { setState(() => _date = _date.subtract(const Duration(days: 1))); _load(); },
-          icon: const Icon(Icons.chevron_left, color: AppTheme.textSecondary),
-          padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+  Widget _filterBar() => Container(
+    color: AppTheme.surface,
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+    child: Wrap(spacing: 10, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+      _datePicker(label: 'From Date', value: _from, onChanged: (d) { setState(() => _from = d); _load(); }),
+      _datePicker(label: 'To Date', value: _to, onChanged: (d) { setState(() => _to = d); _load(); }),
+      SizedBox(width: 170, child: _dropFilter(
+        value: _deptId,
+        items: [const DropdownMenuItem(value: 'all', child: Text('All Departments')),
+          ..._depts.map((d) => DropdownMenuItem(value: (d['id'] ?? d['_id'] ?? '').toString(), child: Text((d['name'] ?? '').toString(), overflow: TextOverflow.ellipsis)))],
+        onChanged: (v) => setState(() => _deptId = v ?? 'all'),
+      )),
+      SizedBox(width: 180, child: _dropFilter(
+        value: _empId,
+        items: [const DropdownMenuItem(value: 'all', child: Text('All Employees')),
+          ..._employees.map((e) {
+            final id = (e['id'] ?? e['_id'] ?? '').toString();
+            final name = '${e['firstName'] ?? ''} ${e['lastName'] ?? ''}'.trim();
+            return DropdownMenuItem(value: id, child: Text(name.isEmpty ? id : name, overflow: TextOverflow.ellipsis));
+          })],
+        onChanged: (v) => setState(() => _empId = v ?? 'all'),
+      )),
+      SizedBox(width: 140, child: _dropFilter(
+        value: _statusFilter,
+        items: const [
+          DropdownMenuItem(value: 'all', child: Text('All Status')),
+          DropdownMenuItem(value: 'present', child: Text('Present')),
+          DropdownMenuItem(value: 'absent', child: Text('Absent')),
+          DropdownMenuItem(value: 'late', child: Text('Late')),
+          DropdownMenuItem(value: 'leave', child: Text('Leave')),
+        ],
+        onChanged: (v) => setState(() => _statusFilter = v ?? 'all'),
+      )),
+      TextButton(
+        onPressed: _clearFilters,
+        style: TextButton.styleFrom(
+          backgroundColor: AppTheme.surfaceElevated,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
-        const SizedBox(width: 8),
-        GestureDetector(
-          onTap: () async {
-            final p = await showDatePicker(
-              context: context, initialDate: _date,
-              firstDate: DateTime(2020), lastDate: DateTime.now(),
-              builder: (_, c) => Theme(
-                data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: AppTheme.primary)),
-                child: c!,
-              ),
-            );
-            if (p != null) { setState(() => _date = p); _load(); }
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(children: [
-              const Icon(Icons.calendar_today, color: AppTheme.primary, size: 14),
-              const SizedBox(width: 8),
-              Text(DateFormat('EEE, MMM d, yyyy').format(_date),
-                  style: AppTheme.label(13, color: AppTheme.primary, weight: FontWeight.w600)),
-            ]),
-          ),
-        ),
-        const SizedBox(width: 8),
-        IconButton(
-          onPressed: _date.day == DateTime.now().day ? null : () {
-            setState(() => _date = _date.add(const Duration(days: 1))); _load();
-          },
-          icon: Icon(Icons.chevron_right,
-              color: _date.day == DateTime.now().day ? AppTheme.divider : AppTheme.textSecondary),
-          padding: EdgeInsets.zero, constraints: const BoxConstraints(),
-        ),
-        const Spacer(),
-        IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppTheme.textSecondary, size: 20)),
-      ]),
-    );
-  }
+        child: Text('Clear Filters', style: AppTheme.label(12)),
+      ),
+      IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppTheme.textSecondary, size: 20), padding: const EdgeInsets.all(8), constraints: const BoxConstraints()),
+    ]),
+  );
 
-  Widget _statsRow() {
+  Widget _datePicker({required String label, required DateTime value, required void Function(DateTime) onChanged}) =>
+    GestureDetector(
+      onTap: () async {
+        final p = await showDatePicker(
+          context: context, initialDate: value,
+          firstDate: DateTime(2020), lastDate: DateTime.now().add(const Duration(days: 1)),
+          builder: (_, c) => Theme(data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: AppTheme.primary)), child: c!),
+        );
+        if (p != null) onChanged(p);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(color: AppTheme.background, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppTheme.divider)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text(label, style: AppTheme.label(9, color: AppTheme.textSecondary)),
+            Text(DateFormat('MMM d, yyyy').format(value), style: AppTheme.label(12, color: AppTheme.textPrimary, weight: FontWeight.w600)),
+          ]),
+          const SizedBox(width: 8),
+          const Icon(Icons.calendar_today, size: 13, color: AppTheme.textSecondary),
+        ]),
+      ),
+    );
+
+  Widget _dropFilter({required String value, required List<DropdownMenuItem<String>> items, required void Function(String?) onChanged}) =>
+    Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      height: 42,
+      decoration: BoxDecoration(color: AppTheme.background, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppTheme.divider)),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(value: value, isExpanded: true, dropdownColor: AppTheme.surfaceElevated, style: AppTheme.body(12), iconEnabledColor: AppTheme.textSecondary, items: items, onChanged: onChanged),
+      ),
+    );
+
+  Widget _statCards() {
     final present = (_stats['present'] ?? _stats['presentToday']) as int? ?? _cnt('present');
     final absent = (_stats['absent'] ?? _stats['absentToday']) as int? ?? _cnt('absent');
     final late = (_stats['late'] ?? _stats['lateToday']) as int? ?? _cnt('late');
-    final leave = (_stats['onLeave'] ?? _stats['leave']) as int? ?? _cnt('leave');
+    final total = _records.length;
     return Container(
       color: AppTheme.surface,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: Row(children: [
-        _statChip('Present', present, const Color(0xFF4ADE80), 'present'),
+        _statCard('Present Today', present, const Color(0xFF4ADE80), Icons.check_circle_outline),
         const SizedBox(width: 10),
-        _statChip('Absent', absent, const Color(0xFFF87171), 'absent'),
+        _statCard('Absent Today', absent, const Color(0xFFF87171), Icons.cancel_outlined),
         const SizedBox(width: 10),
-        _statChip('Late', late, const Color(0xFF60A5FA), 'late'),
+        _statCard('Late Today', late, const Color(0xFFFBBF24), Icons.schedule_outlined),
         const SizedBox(width: 10),
-        _statChip('Leave', leave, const Color(0xFFFBBF24), 'leave'),
+        _statCard('Total Records', total, AppTheme.primary, Icons.event_note_outlined),
       ]),
     );
   }
 
-  Widget _statChip(String label, int count, Color color, String filterKey) {
-    final active = _statusFilter == filterKey;
-    return GestureDetector(
-      onTap: () => setState(() => _statusFilter = active ? 'all' : filterKey),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? color.withOpacity(0.22) : color.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(8),
-          border: active ? Border.all(color: color, width: 1.5) : null,
-        ),
-        child: Column(children: [
-          Text('$count', style: GoogleFonts.poppins(color: color, fontSize: 16, fontWeight: FontWeight.w700)),
-          Text(label, style: AppTheme.label(10, color: color)),
-        ]),
-      ),
-    );
-  }
+  Widget _statCard(String label, int count, Color color, IconData icon) => Expanded(child: Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: color.withOpacity(0.25))),
+    child: Row(children: [
+      Container(width: 38, height: 38, decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: color, size: 18)),
+      const SizedBox(width: 10),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('$count', style: GoogleFonts.poppins(color: color, fontSize: 20, fontWeight: FontWeight.w700, height: 1.1)),
+        Text(label, style: AppTheme.label(10, color: color.withOpacity(0.8))),
+      ])),
+    ]),
+  ));
 
   Widget _body() {
     if (_loading) return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
     if (_error != null) return _errWidget(_error!, _load);
-    if (_records.isEmpty) return _emptyWidget('No attendance records for this date');
     final shown = _visible;
-    if (shown.isEmpty) return _emptyWidget('No ${_statusFilter == "all" ? "" : "$_statusFilter "}records for this date');
-    return RefreshIndicator(
-      onRefresh: _load,
-      color: AppTheme.primary,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: shown.length,
-        itemBuilder: (_, i) => _recordCard(shown[i]),
+    if (_records.isEmpty) return _emptyWidget('No attendance records for this period');
+    if (shown.isEmpty) return _emptyWidget('No records match the selected filters');
+
+    // Group by date
+    final grouped = <String, List<Map<String, dynamic>>>{};
+    for (final r in shown) {
+      final raw = r['date'] ?? r['attendanceDate'] ?? r['checkIn'] ?? r['checkInTime'] ?? '';
+      String key = '—';
+      try { key = DateFormat('yyyy-MM-dd').format(DateTime.parse(raw.toString())); } catch (_) {}
+      (grouped[key] ??= []).add(r);
+    }
+    final dates = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+        child: Align(alignment: Alignment.centerLeft,
+            child: Text('Showing ${shown.length} record${shown.length == 1 ? '' : 's'}', style: AppTheme.label(12, color: AppTheme.textSecondary))),
       ),
+      Container(
+        color: AppTheme.background,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: _tableHeader(),
+        ),
+      ),
+      const Divider(color: AppTheme.divider, height: 1),
+      Expanded(child: RefreshIndicator(
+        onRefresh: _load, color: AppTheme.primary,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              for (final date in dates) ...[
+                _dateGroupHeader(date),
+                ...grouped[date]!.asMap().entries.map((e) => _recordRow(e.value, e.key.isOdd)),
+              ],
+            ]),
+          ),
+        ),
+      )),
+    ]);
+  }
+
+  Widget _tableHeader() => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    child: Row(children: [
+      _th(220, 'Employee'),
+      _th(90, 'Emp. ID'),
+      _th(150, 'Department'),
+      _th(130, 'Date'),
+      _th(100, 'Check In'),
+      _th(100, 'Check Out'),
+      _th(80, 'Hours', center: true),
+      _th(90, 'Status', center: true),
+    ]),
+  );
+
+  Widget _dateGroupHeader(String date) {
+    String label = date;
+    try {
+      final dt = DateTime.parse(date);
+      label = DateFormat('EEEE, MMMM d, yyyy').format(dt).toUpperCase();
+    } catch (_) {}
+    return Container(
+      width: 960,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+      decoration: const BoxDecoration(
+        color: AppTheme.surfaceElevated,
+        border: Border(bottom: BorderSide(color: AppTheme.divider, width: 0.5)),
+      ),
+      child: Text(label, style: AppTheme.label(11, color: AppTheme.primary, weight: FontWeight.w700)),
     );
   }
 
-  Widget _recordCard(Map<String, dynamic> r) {
+  Widget _recordRow(Map<String, dynamic> r, bool alt) {
     final firstName = r['firstName'] ?? r['user']?['firstName'] ?? '';
     final lastName = r['lastName'] ?? r['user']?['lastName'] ?? '';
-    final name = '$firstName $lastName'.trim();
-    final empId = r['employeeId'] ?? r['userEmployeeId'] ?? r['user']?['employeeId'] ?? '';
-    final dept = r['department'] ?? r['departmentName'] ?? r['user']?['department']?['name'] ?? '';
+    String name = '$firstName $lastName'.trim();
+    final email = (r['email'] ?? r['user']?['email'] ?? '').toString();
+    if (name.isEmpty) name = (r['name'] ?? 'Employee').toString();
+    final empId = (r['employeeId'] ?? r['userEmployeeId'] ?? r['user']?['employeeId'] ?? '').toString();
+    final dept = (r['department'] ?? r['departmentName'] ?? r['user']?['department']?['name'] ?? '').toString();
     final status = (r['status'] ?? 'present').toString();
     final checkIn = _fmtTime(r['checkIn'] ?? r['checkInTime'] ?? '');
     final checkOut = _fmtTime(r['checkOut'] ?? r['checkOutTime'] ?? '');
     final hours = r['totalHours'] ?? r['workingHours'] ?? '';
+    final dateRaw = r['date'] ?? r['attendanceDate'] ?? r['checkIn'] ?? '';
+    String dateStr = '—';
+    try { dateStr = DateFormat('MMM d').format(DateTime.parse(dateRaw.toString())); } catch (_) {}
+    final cs = [AppTheme.primary, AppTheme.secondary, const Color(0xFFC084FC), const Color(0xFFFBBF24)];
+    final ac = cs[name.isNotEmpty ? name.codeUnitAt(0) % cs.length : 0];
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6)],
+        color: alt ? AppTheme.background.withOpacity(0.5) : AppTheme.surface,
+        border: const Border(bottom: BorderSide(color: AppTheme.divider, width: 0.5)),
       ),
-      child: Row(children: [
-        CircleAvatar(
-          radius: 20,
-          backgroundColor: AppTheme.primary.withOpacity(0.12),
-          child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
-              style: AppTheme.label(14, color: AppTheme.primary, weight: FontWeight.w700)),
-        ),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Expanded(child: Text(name.isEmpty ? 'Employee' : name, style: AppTheme.body(13), overflow: TextOverflow.ellipsis)),
-            if (empId.toString().isNotEmpty) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
-                child: Text(empId.toString(), style: AppTheme.label(10, color: AppTheme.primary, weight: FontWeight.w600)),
-              ),
-            ],
-          ]),
-          if (dept.toString().isNotEmpty)
-            Text(dept.toString(), style: AppTheme.label(11)),
-          const SizedBox(height: 6),
-          Row(children: [
-            if (checkIn.isNotEmpty) _timeChip(Icons.login, checkIn),
-            if (checkOut.isNotEmpty) ...[const SizedBox(width: 8), _timeChip(Icons.logout, checkOut)],
-            if (hours.toString().isNotEmpty) ...[const SizedBox(width: 8), _timeChip(Icons.timer_outlined, '${hours}h')],
-          ]),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        SizedBox(width: 220, child: Row(children: [
+          CircleAvatar(radius: 17, backgroundColor: ac.withOpacity(0.15),
+              child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: AppTheme.label(12, color: ac, weight: FontWeight.w700))),
+          const SizedBox(width: 8),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(name, style: AppTheme.body(12), overflow: TextOverflow.ellipsis),
+            if (email.isNotEmpty) Text(email, style: AppTheme.label(10), overflow: TextOverflow.ellipsis),
+          ])),
         ])),
-        const SizedBox(width: 10),
-        StatusBadge(status: status),
+        SizedBox(width: 90, child: Text(empId.isNotEmpty ? empId : '—', style: AppTheme.label(12, color: AppTheme.primary, weight: FontWeight.w600))),
+        SizedBox(width: 150, child: Text(dept.isNotEmpty ? dept : '—', style: AppTheme.body(12), overflow: TextOverflow.ellipsis)),
+        SizedBox(width: 130, child: Text(dateStr, style: AppTheme.label(12))),
+        SizedBox(width: 100, child: Text(checkIn.isNotEmpty ? checkIn : '—', style: AppTheme.label(12))),
+        SizedBox(width: 100, child: Text(checkOut.isNotEmpty ? checkOut : '—', style: AppTheme.label(12))),
+        SizedBox(width: 80, child: Center(child: Text(hours.toString().isNotEmpty ? '${hours}h' : '—', style: AppTheme.label(12)))),
+        SizedBox(width: 90, child: Center(child: StatusBadge(status: status, fontSize: 10))),
       ]),
     );
   }
 
-  Widget _timeChip(IconData icon, String text) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Icon(icon, size: 11, color: AppTheme.textSecondary),
-      const SizedBox(width: 3),
-      Text(text, style: AppTheme.label(10)),
-    ],
-  );
-
   String _fmtTime(dynamic v) {
     if (v == null || v.toString().isEmpty) return '';
-    try { return DateFormat('hh:mm a').format(DateTime.parse(v.toString()).toLocal()); }
+    try { return DateFormat('h:mm a').format(DateTime.parse(v.toString()).toLocal()); }
     catch (_) { return v.toString().length > 5 ? v.toString().substring(11, 16) : v.toString(); }
   }
 }
@@ -715,6 +823,14 @@ class _ImportExportTab extends StatelessWidget {
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
+
+Widget _th(double w, String label, {bool center = false}) => SizedBox(
+  width: w,
+  child: Align(
+    alignment: center ? Alignment.center : Alignment.centerLeft,
+    child: Text(label.toUpperCase(), style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.4)),
+  ),
+);
 
 Widget _errWidget(String msg, VoidCallback retry) => Center(child: Padding(
   padding: const EdgeInsets.all(24),

@@ -217,6 +217,30 @@ class ApiService {
     }
   }
 
+  Future<void> updateDepartment(String id, Map<String, dynamic> data) async {
+    try {
+      await _dio.patch('/departments/$id', data: data);
+    } on DioException catch (e) {
+      throw Exception(e.response?.data?['message'] ?? 'Failed to update department');
+    }
+  }
+
+  Future<void> createDepartment(Map<String, dynamic> data) async {
+    try {
+      await _dio.post('/departments', data: data);
+    } on DioException catch (e) {
+      throw Exception(e.response?.data?['message'] ?? 'Failed to create department');
+    }
+  }
+
+  Future<void> deleteDepartment(String id) async {
+    try {
+      await _dio.delete('/departments/$id');
+    } on DioException catch (e) {
+      throw Exception(e.response?.data?['message'] ?? 'Failed to delete department');
+    }
+  }
+
   // ── ROLES ────────────────────────────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> getRoles() async {

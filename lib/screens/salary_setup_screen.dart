@@ -93,107 +93,124 @@ class _SalarySetupScreenState extends State<SalarySetupScreen> {
       const SizedBox(height: 12),
       Text('No salary setups found', style: AppTheme.label(14)),
     ]));
-    return RefreshIndicator(
-      onRefresh: _load,
-      color: AppTheme.primary,
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        itemCount: _setups.length,
-        itemBuilder: (_, i) => _setupCard(_setups[i]),
+    return Column(children: [
+      Container(
+        color: AppTheme.background,
+        child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: _tableHeader()),
       ),
-    );
+      const Divider(color: AppTheme.divider, height: 1),
+      Expanded(child: RefreshIndicator(
+        onRefresh: _load, color: AppTheme.primary,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _setups.asMap().entries.map((e) => _setupRow(e.value, e.key.isOdd)).toList(),
+            ),
+          ),
+        ),
+      )),
+    ]);
   }
 
-  Widget _setupCard(Map<String, dynamic> s) {
-    final name = '${s['user']?['firstName'] ?? s['firstName'] ?? ''} ${s['user']?['lastName'] ?? s['lastName'] ?? ''}'.trim();
-    final email = s['user']?['email'] ?? s['email'] ?? '';
-    final empId = s['user']?['employeeId'] ?? s['empId'] ?? s['employeeId'] ?? '';
-    final dept = s['user']?['department']?['name'] ?? s['department'] ?? '';
+  Widget _tableHeader() => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    child: Row(children: [
+      _th(230, 'Employee'),
+      _th(90, 'Emp. ID'),
+      _th(150, 'Department'),
+      _th(130, 'Base Salary'),
+      _th(130, 'Allowances'),
+      _th(120, 'Deductions'),
+      _th(130, 'Net Salary'),
+      _th(90, 'Status', center: true),
+      _th(120, 'Action', center: true),
+    ]),
+  );
+
+  Widget _setupRow(Map<String, dynamic> s, bool alt) {
+    String name = '${s['user']?['firstName'] ?? s['firstName'] ?? ''} ${s['user']?['lastName'] ?? s['lastName'] ?? ''}'.trim();
+    if (name.isEmpty) name = 'Employee';
+    final email = (s['user']?['email'] ?? s['email'] ?? '').toString();
+    final empId = (s['user']?['employeeId'] ?? s['empId'] ?? s['employeeId'] ?? '').toString();
+    final dept = (s['user']?['department']?['name'] ?? s['department'] ?? '').toString();
     final basic = double.tryParse((s['basicSalary'] ?? s['baseSalary'] ?? 0).toString()) ?? 0;
     final net = double.tryParse((s['netSalary'] ?? s['net'] ?? 0).toString()) ?? 0;
     final deductions = double.tryParse((s['totalDeductions'] ?? s['deductions'] ?? 0).toString()) ?? 0;
+    final allowances = double.tryParse((s['totalAllowances'] ?? s['allowances'] ?? 0).toString()) ?? 0;
     final configured = s['isConfigured'] == true || s['configured'] == true || basic > 0;
-    final id = s['id']?.toString() ?? '';
-    final userId = s['userId']?.toString() ?? s['user']?['id']?.toString() ?? '';
+    final id = (s['id'] ?? s['_id'] ?? '').toString();
+    final userId = (s['userId'] ?? s['user']?['id'] ?? s['user']?['_id'] ?? '').toString();
+    final cs = [AppTheme.primary, AppTheme.secondary, const Color(0xFFC084FC), const Color(0xFFFBBF24)];
+    final ac = cs[name.isNotEmpty ? name.codeUnitAt(0) % cs.length : 0];
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
       decoration: BoxDecoration(
-        color: AppTheme.surface, borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6)],
+        color: alt ? AppTheme.background.withOpacity(0.5) : AppTheme.surface,
+        border: const Border(bottom: BorderSide(color: AppTheme.divider, width: 0.5)),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: AppTheme.primary.withOpacity(0.12),
-            child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
-                style: AppTheme.label(14, color: AppTheme.primary, weight: FontWeight.w700)),
-          ),
-          const SizedBox(width: 12),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        SizedBox(width: 230, child: Row(children: [
+          CircleAvatar(radius: 18, backgroundColor: ac.withOpacity(0.15),
+              child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: AppTheme.label(12, color: ac, weight: FontWeight.w700))),
+          const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(name.isEmpty ? 'Employee' : name, style: AppTheme.body(13)),
-            if (email.toString().isNotEmpty) Text(email.toString(), style: AppTheme.label(10), overflow: TextOverflow.ellipsis),
+            Text(name, style: AppTheme.body(12), overflow: TextOverflow.ellipsis),
+            if (email.isNotEmpty) Text(email, style: AppTheme.label(10), overflow: TextOverflow.ellipsis),
           ])),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            if (empId.toString().isNotEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                child: Text(empId.toString(), style: AppTheme.label(9, color: AppTheme.primary, weight: FontWeight.w600)),
-              ),
-            const SizedBox(height: 4),
-            StatusBadge(status: configured ? 'active' : 'pending', fontSize: 10),
-          ]),
-        ]),
-        const SizedBox(height: 12),
-        const Divider(height: 1, color: AppTheme.divider),
-        const SizedBox(height: 12),
-        Row(children: [
-          if (dept.toString().isNotEmpty)
-            Expanded(child: Row(children: [
-              const Icon(Icons.business_outlined, size: 11, color: AppTheme.textSecondary),
-              const SizedBox(width: 4),
-              Expanded(child: Text(dept.toString(), style: AppTheme.label(11), overflow: TextOverflow.ellipsis)),
-            ])),
-          _amtCol('Basic', basic),
-          const SizedBox(width: 16),
-          _amtCol('Deductions', deductions, color: AppTheme.error),
-          const SizedBox(width: 16),
-          _amtCol('Net', net, color: AppTheme.secondary),
-          const Spacer(),
-          Row(children: [
-            IconButton(
-              icon: const Icon(Icons.edit_outlined, color: AppTheme.primary, size: 18),
-              onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => SalarySetupEditScreen(setup: s, userId: userId))
-              ).then((_) => _load()),
-              padding: EdgeInsets.zero, constraints: const BoxConstraints(),
-              tooltip: 'Edit',
+        ])),
+        SizedBox(width: 90, child: Text(empId.isNotEmpty ? empId : '—', style: AppTheme.label(11, color: AppTheme.primary, weight: FontWeight.w600))),
+        SizedBox(width: 150, child: Text(dept.isNotEmpty ? dept : '—', style: AppTheme.body(12), overflow: TextOverflow.ellipsis)),
+        SizedBox(width: 130, child: Text(_fmt(basic), style: AppTheme.body(12))),
+        SizedBox(width: 130, child: Text('+${_fmt(allowances)}', style: AppTheme.label(12, color: const Color(0xFF4ADE80), weight: FontWeight.w600))),
+        SizedBox(width: 120, child: Text('-${_fmt(deductions)}', style: AppTheme.label(12, color: AppTheme.error, weight: FontWeight.w600))),
+        SizedBox(width: 130, child: Text(_fmt(net), style: AppTheme.label(12, color: AppTheme.textPrimary, weight: FontWeight.w700))),
+        SizedBox(width: 90, child: Center(child: StatusBadge(status: configured ? 'active' : 'pending', fontSize: 10))),
+        SizedBox(width: 120, child: Center(child: Row(mainAxisSize: MainAxisSize.min, children: [
+          InkWell(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SalarySetupEditScreen(setup: s, userId: userId))).then((_) => _load()),
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(6)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.edit_outlined, size: 13, color: AppTheme.primary),
+                const SizedBox(width: 4),
+                Text('Edit', style: AppTheme.label(11, color: AppTheme.primary)),
+              ]),
             ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, color: AppTheme.error, size: 18),
-              onPressed: () async {
-                final ok = await _confirmDelete(name);
-                if (ok == true) { await ApiService().deleteSalarySetup(id); _load(); }
-              },
-              padding: EdgeInsets.zero, constraints: const BoxConstraints(),
-              tooltip: 'Delete',
+          ),
+          const SizedBox(width: 6),
+          InkWell(
+            onTap: () async {
+              final ok = await _confirmDelete(name);
+              if (ok == true) { await ApiService().deleteSalarySetup(id); _load(); }
+            },
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(color: AppTheme.error.withOpacity(0.10), borderRadius: BorderRadius.circular(6)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.delete_outline, size: 13, color: AppTheme.error),
+                const SizedBox(width: 4),
+                Text('Del', style: AppTheme.label(11, color: AppTheme.error)),
+              ]),
             ),
-          ]),
-        ]),
+          ),
+        ]))),
       ]),
     );
   }
 
-  Widget _amtCol(String label, double value, {Color? color}) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(label, style: AppTheme.label(9)),
-      Text(_fmt(value), style: AppTheme.label(11, color: color ?? AppTheme.textPrimary, weight: FontWeight.w600)),
-    ],
+  Widget _th(double w, String label, {bool center = false}) => SizedBox(
+    width: w,
+    child: Align(
+      alignment: center ? Alignment.center : Alignment.centerLeft,
+      child: Text(label.toUpperCase(), style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.4)),
+    ),
   );
 
   Future<bool?> _confirmDelete(String name) => showDialog<bool>(
