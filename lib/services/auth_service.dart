@@ -85,15 +85,77 @@ class AuthService {
     } on DioException catch (e) {
       final status = e.response?.statusCode;
       if (status == 401 || status == 403) {
-        await logout();
-        return false;
+        // Access token expired — try refresh token before logging out
+        final refreshed = await _tryRefreshToken(prefs);
+        if (!refreshed) {
+          await logout();
+          return false;
+        }
+        // Refresh succeeded; _currentUser updated inside _tryRefreshToken
       }
-      // Network/timeout — use restored user from prefs
+      // Network/timeout or other error — use restored user from prefs
     } catch (_) {
       // Parse error — use restored user from prefs
     }
 
     return _currentUser != null;
+  }
+
+  Future<bool> _tryRefreshToken(SharedPreferences prefs) async {
+    final refreshToken = prefs.getString('refresh_token');
+    if (refreshToken == null || refreshToken.isEmpty) return false;
+
+    // Try common refresh endpoint variants
+    final endpoints = ['/auth/refresh', '/auth/refresh-token', '/auth/token/refresh'];
+    for (final endpoint in endpoints) {
+      try {
+        final res = await Dio(BaseOptions(
+          baseUrl: ApiConfig.baseUrl,
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 10),
+        )).post(endpoint, data: {'refreshToken': refreshToken});
+
+        final data = res.data?['data'] ?? res.data;
+        if (data == null) continue;
+
+        final newAccess = data['accessToken'] ?? data['access_token'] ?? data['token'];
+        if (newAccess == null) continue;
+
+        _accessToken = newAccess.toString();
+        await prefs.setString('access_token', _accessToken!);
+
+        final newRefresh = data['refreshToken'] ?? data['refresh_token'];
+        if (newRefresh != null) {
+          await prefs.setString('refresh_token', newRefresh.toString());
+        }
+
+        // Fetch fresh user with the new token
+        try {
+          final userRes = await Dio(BaseOptions(
+            baseUrl: ApiConfig.baseUrl,
+            headers: {'Authorization': 'Bearer $_accessToken'},
+            connectTimeout: const Duration(seconds: 10),
+            receiveTimeout: const Duration(seconds: 10),
+          )).get(ApiConfig.me);
+          final raw = userRes.data?['data'] ?? userRes.data;
+          if (raw is Map<String, dynamic>) {
+            _currentUser = User.fromJson(raw);
+            await prefs.setString('u_role', _currentUser!.role);
+            await prefs.setString('u_firstName', _currentUser!.firstName);
+            await prefs.setString('u_lastName', _currentUser!.lastName);
+          }
+        } catch (_) {
+          // Token refreshed but user fetch failed — saved user from prefs is still valid
+        }
+        return true;
+      } on DioException catch (e) {
+        // 404 = wrong endpoint, try next; any other error = refresh rejected
+        if (e.response?.statusCode != 404) return false;
+      } catch (_) {
+        return false;
+      }
+    }
+    return false;
   }
 
   Future<void> logout() async {

@@ -53,7 +53,9 @@ class _EmployeesTab extends StatefulWidget {
   State<_EmployeesTab> createState() => _EmployeesTabState();
 }
 
-class _EmployeesTabState extends State<_EmployeesTab> {
+class _EmployeesTabState extends State<_EmployeesTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   List<Map<String, dynamic>> _all = [], _filtered = [];
   bool _loading = true;
   String? _error;
@@ -93,6 +95,7 @@ class _EmployeesTabState extends State<_EmployeesTab> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Column(children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
@@ -214,7 +217,9 @@ class _DepartmentsTab extends StatefulWidget {
   State<_DepartmentsTab> createState() => _DepartmentsTabState();
 }
 
-class _DepartmentsTabState extends State<_DepartmentsTab> {
+class _DepartmentsTabState extends State<_DepartmentsTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   List<Map<String, dynamic>> _depts = [], _employees = [];
   bool _loading = true;
   String? _error;
@@ -236,14 +241,25 @@ class _DepartmentsTabState extends State<_DepartmentsTab> {
     }
   }
 
-  int _count(dynamic id) => _employees.where((e) {
-    final dObj = e['department'] is Map ? e['department'] as Map : null;
-    final dId = dObj?['id'] ?? dObj?['_id'] ?? e['departmentId'];
-    return dId?.toString() == id?.toString();
-  }).length;
+  // Match by ID first, then fall back to name comparison
+  bool _matches(Map<String, dynamic> emp, Map<String, dynamic> dept) {
+    final deptId = (dept['id'] ?? dept['_id'])?.toString();
+    final deptName = (dept['name'] ?? '').toString().toLowerCase();
+    final dObj = emp['department'] is Map ? emp['department'] as Map : null;
+    final eDeptId = (dObj?['id'] ?? dObj?['_id'] ?? emp['departmentId'])?.toString();
+    final eDeptName = (dObj?['name'] ?? emp['departmentName'] ?? '').toString().toLowerCase();
+    if (deptId != null && deptId.isNotEmpty && eDeptId != null && eDeptId.isNotEmpty && deptId == eDeptId) return true;
+    if (deptName.isNotEmpty && eDeptName.isNotEmpty && deptName == eDeptName) return true;
+    return false;
+  }
+
+  int _count(Map<String, dynamic> dept) => _employees.where((e) => _matches(e, dept)).length;
+  List<Map<String, dynamic>> _membersOf(Map<String, dynamic> dept) =>
+      _employees.where((e) => _matches(e, dept)).toList();
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     if (_loading) return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
     if (_error != null) return _errWidget(_error!, _load);
     if (_depts.isEmpty) return _emptyWidget('No departments found');
@@ -254,35 +270,42 @@ class _DepartmentsTabState extends State<_DepartmentsTab> {
       itemBuilder: (_, i) {
         final d = _depts[i];
         final name = (d['name'] ?? d['departmentName'] ?? d['title'] ?? '').toString();
-        final deptId = d['id'] ?? d['_id'] ?? d['departmentId'];
-        final count = _count(deptId);
+        final count = _count(d);
         final color = colors[i % colors.length];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppTheme.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border(left: BorderSide(color: color, width: 3)),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6)],
+        return GestureDetector(
+          onTap: () => showModalBottomSheet(
+            context: context,
+            backgroundColor: Colors.transparent,
+            isScrollControlled: true,
+            builder: (_) => _MembersSheet(title: name, members: _membersOf(d)),
           ),
-          child: Row(children: [
-            Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-              child: Icon(Icons.business, color: color, size: 22),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border(left: BorderSide(color: color, width: 3)),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6)],
             ),
-            const SizedBox(width: 14),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(name.toString(), style: AppTheme.body(14)),
-              Text('$count members', style: AppTheme.label(12)),
-            ])),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
-              child: Text('$count', style: GoogleFonts.poppins(color: color, fontSize: 18, fontWeight: FontWeight.w700)),
-            ),
-          ]),
+            child: Row(children: [
+              Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+                child: Icon(Icons.business, color: color, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(name, style: AppTheme.body(14)),
+                Text('$count members', style: AppTheme.label(12)),
+              ])),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                child: Text('$count', style: GoogleFonts.poppins(color: color, fontSize: 18, fontWeight: FontWeight.w700)),
+              ),
+            ]),
+          ),
         );
       },
     );
@@ -297,8 +320,10 @@ class _RolesTab extends StatefulWidget {
   State<_RolesTab> createState() => _RolesTabState();
 }
 
-class _RolesTabState extends State<_RolesTab> {
-  List<Map<String, dynamic>> _roles = [];
+class _RolesTabState extends State<_RolesTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+  List<Map<String, dynamic>> _roles = [], _employees = [];
   bool _loading = true;
   String? _error;
 
@@ -308,15 +333,28 @@ class _RolesTabState extends State<_RolesTab> {
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final data = await ApiService().getRoles();
-      if (mounted) setState(() { _roles = data; _loading = false; });
+      final r = await Future.wait([ApiService().getRoles(), ApiService().getEmployees()]);
+      if (mounted) setState(() {
+        _roles = r[0] as List<Map<String, dynamic>>;
+        _employees = r[1] as List<Map<String, dynamic>>;
+        _loading = false;
+      });
     } catch (e) {
       if (mounted) setState(() { _error = e.toString(); _loading = false; });
     }
   }
 
+  List<Map<String, dynamic>> _membersOf(String roleName) => _employees.where((e) {
+    final roleRaw = e['role'];
+    final rName = roleRaw is Map
+        ? (roleRaw['name'] ?? '').toString()
+        : (roleRaw ?? '').toString();
+    return rName.toLowerCase() == roleName.toLowerCase();
+  }).toList();
+
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     if (_loading) return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
     if (_error != null) return _errWidget(_error!, _load);
     if (_roles.isEmpty) return _emptyWidget('No roles found');
@@ -326,31 +364,45 @@ class _RolesTabState extends State<_RolesTab> {
       itemCount: _roles.length,
       itemBuilder: (_, i) {
         final r = _roles[i];
-        final name = r['name'] ?? r['roleName'] ?? '';
+        final name = (r['name'] ?? r['roleName'] ?? '').toString();
         final perms = r['permissions'] ?? r['level'] ?? r['permissionLevel'] ?? '';
         final color = colors[i % colors.length];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppTheme.surface,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6)],
+        final members = _membersOf(name);
+        return GestureDetector(
+          onTap: () => showModalBottomSheet(
+            context: context,
+            backgroundColor: Colors.transparent,
+            isScrollControlled: true,
+            builder: (_) => _MembersSheet(title: name, members: members),
           ),
-          child: Row(children: [
-            Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-              child: Icon(Icons.admin_panel_settings_outlined, color: color, size: 22),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6)],
             ),
-            const SizedBox(width: 14),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(name.toString(), style: AppTheme.body(14)),
-              if (perms.toString().isNotEmpty)
-                Text('Permission Level: ${perms.toString()}', style: AppTheme.label(11)),
-            ])),
-            Icon(Icons.chevron_right, color: AppTheme.textSecondary.withOpacity(0.5)),
-          ]),
+            child: Row(children: [
+              Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+                child: Icon(Icons.admin_panel_settings_outlined, color: color, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(name, style: AppTheme.body(14)),
+                if (perms.toString().isNotEmpty)
+                  Text('Permission Level: ${perms.toString()}', style: AppTheme.label(11)),
+                Text('${members.length} employees', style: AppTheme.label(11)),
+              ])),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                child: Text('${members.length}', style: GoogleFonts.poppins(color: color, fontSize: 16, fontWeight: FontWeight.w700)),
+              ),
+            ]),
+          ),
         );
       },
     );
@@ -886,6 +938,80 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
       ),
     ),
   );
+}
+
+// ── Members Sheet ─────────────────────────────────────────────────────────────
+
+class _MembersSheet extends StatelessWidget {
+  final String title;
+  final List<Map<String, dynamic>> members;
+  const _MembersSheet({required this.title, required this.members});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.75),
+      decoration: const BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          margin: const EdgeInsets.only(top: 12), width: 40, height: 4,
+          decoration: BoxDecoration(color: AppTheme.divider, borderRadius: BorderRadius.circular(2)),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Row(children: [
+            Expanded(child: Text(title, style: AppTheme.heading(17))),
+            const SizedBox(width: 8),
+            Text('${members.length} members', style: AppTheme.label(12)),
+          ]),
+        ),
+        const Divider(color: AppTheme.divider, height: 1),
+        members.isEmpty
+            ? Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.inbox_outlined, size: 40, color: AppTheme.textSecondary.withOpacity(0.4)),
+                  const SizedBox(height: 10),
+                  Text('No members found', style: AppTheme.label(14)),
+                ]),
+              )
+            : Flexible(
+                child: ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: members.length,
+                  separatorBuilder: (_, __) => Divider(color: AppTheme.divider.withOpacity(0.5), height: 14),
+                  itemBuilder: (_, idx) {
+                    final e = members[idx];
+                    String name = '${e['firstName'] ?? e['first_name'] ?? ''} ${e['lastName'] ?? e['last_name'] ?? ''}'.trim();
+                    if (name.isEmpty) name = (e['name'] ?? 'Unknown').toString();
+                    final isActive = e['isActive'] == true || e['isActive'] == 1 ||
+                        e['status']?.toString().toLowerCase() == 'active';
+                    final empId = (e['employeeId'] ?? e['empId'] ?? '').toString();
+                    final cs = [AppTheme.primary, AppTheme.secondary, const Color(0xFFC084FC), const Color(0xFFFBBF24)];
+                    final ac = cs[name.isNotEmpty ? name.codeUnitAt(0) % cs.length : 0];
+                    return Row(children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: ac.withOpacity(0.15),
+                        child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
+                            style: AppTheme.label(13, color: ac, weight: FontWeight.w700)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(name, style: AppTheme.body(13), overflow: TextOverflow.ellipsis),
+                        if (empId.isNotEmpty) Text('ID: $empId', style: AppTheme.label(11)),
+                      ])),
+                      StatusBadge(status: isActive ? 'active' : 'inactive', fontSize: 10),
+                    ]);
+                  },
+                ),
+              ),
+      ]),
+    );
+  }
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
