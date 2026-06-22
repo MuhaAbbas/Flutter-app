@@ -63,7 +63,7 @@ class _AllMeetingsTabState extends State<_AllMeetingsTab> {
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final data = await ApiService().getMeetings();
+      final data = await ApiService().getMeetingsAll();
       if (mounted) setState(() { _meetings = data; _loading = false; });
     } catch (e) {
       if (mounted) setState(() { _error = e.toString(); _loading = false; });

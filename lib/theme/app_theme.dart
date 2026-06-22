@@ -34,7 +34,7 @@ class AppTheme {
         fontWeight: FontWeight.w600,
       ),
     ),
-    tabBarTheme: TabBarTheme(
+    tabBarTheme: TabBarThemeData(
       labelColor: primary,
       unselectedLabelColor: textSecondary,
       indicatorColor: primary,
@@ -42,7 +42,7 @@ class AppTheme {
       unselectedLabelStyle: GoogleFonts.inter(fontSize: 13),
     ),
     dividerTheme: const DividerThemeData(color: divider, thickness: 1),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: surface,
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

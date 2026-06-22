@@ -121,12 +121,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Widget _statsGrid() {
     final items = [
-      (title: 'Total Employees', count: '${_stats.totalEmployees}', icon: Icons.people, color: AppTheme.primary),
-      (title: 'Present Today', count: '${_stats.presentToday}', icon: Icons.check_circle_outline, color: const Color(0xFF4ADE80)),
-      (title: 'Absent Today', count: '${_stats.absentToday}', icon: Icons.cancel_outlined, color: const Color(0xFFF87171)),
+      (title: 'Total Employees', count: '${_stats.total}', icon: Icons.people, color: AppTheme.primary),
+      (title: 'Present Today', count: '${_stats.present}', icon: Icons.check_circle_outline, color: const Color(0xFF4ADE80)),
+      (title: 'Absent Today', count: '${_stats.absent}', icon: Icons.cancel_outlined, color: const Color(0xFFF87171)),
       (title: 'On Leave', count: '${_stats.onLeave}', icon: Icons.beach_access_outlined, color: const Color(0xFFFBBF24)),
-      (title: 'Pending Requests', count: '${_stats.pendingRequests}', icon: Icons.pending_actions_outlined, color: const Color(0xFFC084FC)),
-      (title: 'Late Today', count: '${_stats.lateToday}', icon: Icons.schedule_outlined, color: const Color(0xFF60A5FA)),
+      (title: 'Late Today', count: '${_stats.late}', icon: Icons.schedule_outlined, color: const Color(0xFF60A5FA)),
     ];
 
     return LayoutBuilder(builder: (_, constraints) {
@@ -154,8 +153,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget _chartSection() {
     final now = DateTime.now();
     final weekDayIndex = now.weekday - 1;
-    final presentBase = _stats.presentToday > 0 ? _stats.presentToday : 20;
-    final absentBase = _stats.absentToday > 0 ? _stats.absentToday : 5;
+    final presentBase = _stats.present > 0 ? _stats.present : 20;
+    final absentBase = _stats.absent > 0 ? _stats.absent : 5;
 
     final presentData = List.generate(7, (i) {
       if (i == weekDayIndex) return presentBase.toDouble();

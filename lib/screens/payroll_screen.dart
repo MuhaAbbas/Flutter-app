@@ -32,8 +32,12 @@ class _PayrollScreenState extends State<PayrollScreen> {
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final data = await ApiService().getPayrolls(month: _month, year: _year);
-      if (mounted) setState(() { _payrolls = data; _loading = false; });
+      final raw = await ApiService().getPayroll(month: _month, year: _year);
+      if (mounted) setState(() {
+        final list = raw['records'] ?? raw['data'] ?? raw['payrolls'] ?? [];
+        _payrolls = list is List ? list.cast<Map<String, dynamic>>() : <Map<String, dynamic>>[];
+        _loading = false;
+      });
     } catch (e) {
       if (mounted) setState(() { _error = e.toString(); _loading = false; });
     }
