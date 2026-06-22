@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
+import '../services/theme_service.dart';
 import 'admin_dashboard.dart';
 import 'employees_screen.dart';
 import 'attendance_screen.dart';
@@ -125,6 +126,7 @@ class _AdminMainState extends State<AdminMain> {
             ),
           ),
           const Divider(color: AppTheme.divider, height: 1),
+          _themeToggleItem(),
           _logoutItem(),
           const SizedBox(height: 12),
         ],
@@ -235,6 +237,42 @@ class _AdminMainState extends State<AdminMain> {
         ),
       ),
     ),
+    );
+  }
+
+  Widget _themeToggleItem() {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeNotifier,
+      builder: (_, mode, __) {
+        final isDark = mode == ThemeMode.dark;
+        return Tooltip(
+          message: _extended ? '' : (isDark ? 'Light mode' : 'Dark mode'),
+          preferBelow: false,
+          waitDuration: const Duration(milliseconds: 400),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: GestureDetector(
+              onTap: () => ThemeService.setMode(isDark ? ThemeMode.light : ThemeMode.dark),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: _extended ? 12 : 8, vertical: 10),
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(10)),
+                child: Row(
+                  mainAxisAlignment: _extended ? MainAxisAlignment.start : MainAxisAlignment.center,
+                  children: [
+                    Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                        color: AppTheme.textSecondary, size: 20),
+                    if (_extended) ...[
+                      const SizedBox(width: 10),
+                      Text(isDark ? 'Light Mode' : 'Dark Mode', style: GoogleFonts.inter(
+                        color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

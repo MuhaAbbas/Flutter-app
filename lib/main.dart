@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'services/auth_service.dart';
+import 'services/theme_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/admin_main.dart';
 import 'screens/employee_main.dart';
@@ -7,6 +8,7 @@ import 'theme/app_theme.dart' as theme_pkg;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await ThemeService.load();
   runApp(const AttendanceApp());
 }
 
@@ -15,11 +17,16 @@ class AttendanceApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Attendance System',
-      debugShowCheckedModeBanner: false,
-      theme: theme_pkg.AppTheme.dark,
-      home: const _SplashRouter(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeNotifier,
+      builder: (_, mode, __) => MaterialApp(
+        title: 'Attendance System',
+        debugShowCheckedModeBanner: false,
+        theme: theme_pkg.AppTheme.light,
+        darkTheme: theme_pkg.AppTheme.dark,
+        themeMode: mode,
+        home: const _SplashRouter(),
+      ),
     );
   }
 }

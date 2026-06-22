@@ -618,7 +618,12 @@ class ApiService {
             ['setups', 'salarySetups', 'salaries', 'items', 'records', 'data', 'structures']);
       } catch (e) {
         lastErr = e;
-        if (e is DioException && (e.response?.statusCode ?? 0) != 404) rethrow;
+        if (e is DioException) {
+          final s = e.response?.statusCode ?? 0;
+          // 404 = wrong path, 401/403 = not applicable endpoint — skip and try next
+          if (s == 404 || s == 401 || s == 403) continue;
+          rethrow;
+        }
       }
     }
     throw Exception(

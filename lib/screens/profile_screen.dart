@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/theme_service.dart';
 import 'login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -263,6 +264,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 10),
                 _infoRow('Last Updated', _formatDate(lastUpdated)),
               ],
+            ]),
+            const SizedBox(height: 16),
+
+            // ── Appearance ──────────────────────────────────────────────────
+            _section('Appearance', [
+              ValueListenableBuilder<ThemeMode>(
+                valueListenable: ThemeService.themeNotifier,
+                builder: (_, mode, __) {
+                  final isDark = mode == ThemeMode.dark;
+                  return Row(children: [
+                    Icon(isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                        color: Colors.white70, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(isDark ? 'Dark Mode' : 'Light Mode',
+                          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                      Text(isDark ? 'Switch to light theme' : 'Switch to dark theme',
+                          style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                    ])),
+                    Switch(
+                      value: isDark,
+                      onChanged: (v) => ThemeService.setMode(v ? ThemeMode.dark : ThemeMode.light),
+                      activeColor: const Color(0xFF3B82F6),
+                    ),
+                  ]);
+                },
+              ),
             ]),
             const SizedBox(height: 20),
 

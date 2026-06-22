@@ -22,11 +22,44 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
   int _month = DateTime.now().month;
   int _year = DateTime.now().year;
 
+  // Synced horizontal scroll controllers
+  late final ScrollController _hHeader;
+  late final ScrollController _hBody;
+  bool _hSyncing = false;
+
   static const _months = ['January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'];
 
   @override
-  void initState() { super.initState(); _loadMeta(); }
+  void initState() {
+    super.initState();
+    _hHeader = ScrollController();
+    _hBody   = ScrollController();
+    _hHeader.addListener(_onHeaderScroll);
+    _hBody.addListener(_onBodyScroll);
+    _loadMeta();
+  }
+
+  void _onHeaderScroll() {
+    if (_hSyncing) return;
+    _hSyncing = true;
+    if (_hBody.hasClients) _hBody.jumpTo(_hHeader.offset.clamp(_hBody.position.minScrollExtent, _hBody.position.maxScrollExtent));
+    _hSyncing = false;
+  }
+
+  void _onBodyScroll() {
+    if (_hSyncing) return;
+    _hSyncing = true;
+    if (_hHeader.hasClients) _hHeader.jumpTo(_hBody.offset.clamp(_hHeader.position.minScrollExtent, _hHeader.position.maxScrollExtent));
+    _hSyncing = false;
+  }
+
+  @override
+  void dispose() {
+    _hHeader.dispose();
+    _hBody.dispose();
+    super.dispose();
+  }
 
   Future<void> _loadMeta() async {
     try {
@@ -152,7 +185,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
       ),
       Container(
         color: AppTheme.background,
-        child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: _tableHeader()),
+        child: SingleChildScrollView(controller: _hHeader, scrollDirection: Axis.horizontal, child: _tableHeader()),
       ),
       const Divider(color: AppTheme.divider, height: 1),
       Expanded(child: RefreshIndicator(
@@ -160,6 +193,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: SingleChildScrollView(
+            controller: _hBody,
             scrollDirection: Axis.horizontal,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               for (final date in dates) ...[

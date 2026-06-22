@@ -45,6 +45,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       ),
       body: TabBarView(
         controller: _tab,
+        // Prevent horizontal swipe from switching tabs — conflicts with table scroll
+        physics: const NeverScrollableScrollPhysics(),
         children: [
           _RecordsTab(filterNotifier: widget.filterNotifier),
           const _CorrectionsTab(),
@@ -76,6 +78,11 @@ class _RecordsTabState extends State<_RecordsTab> {
   String _deptId = 'all';
   String _statusFilter = 'all';
 
+  // Synced horizontal scroll controllers for sticky header
+  late final ScrollController _hHeader;
+  late final ScrollController _hBody;
+  bool _hSyncing = false;
+
   List<Map<String, dynamic>> get _visible {
     return _records.where((r) {
       bool stOk = _statusFilter == 'all' || (r['status'] ?? '').toString().toLowerCase() == _statusFilter;
@@ -96,8 +103,26 @@ class _RecordsTabState extends State<_RecordsTab> {
   @override
   void initState() {
     super.initState();
+    _hHeader = ScrollController();
+    _hBody   = ScrollController();
+    _hHeader.addListener(_onHeaderScroll);
+    _hBody.addListener(_onBodyScroll);
     widget.filterNotifier?.addListener(_onExternalFilter);
     _loadAll();
+  }
+
+  void _onHeaderScroll() {
+    if (_hSyncing) return;
+    _hSyncing = true;
+    if (_hBody.hasClients) _hBody.jumpTo(_hHeader.offset.clamp(_hBody.position.minScrollExtent, _hBody.position.maxScrollExtent));
+    _hSyncing = false;
+  }
+
+  void _onBodyScroll() {
+    if (_hSyncing) return;
+    _hSyncing = true;
+    if (_hHeader.hasClients) _hHeader.jumpTo(_hBody.offset.clamp(_hHeader.position.minScrollExtent, _hHeader.position.maxScrollExtent));
+    _hSyncing = false;
   }
 
   void _onExternalFilter() {
@@ -107,6 +132,8 @@ class _RecordsTabState extends State<_RecordsTab> {
 
   @override
   void dispose() {
+    _hHeader.dispose();
+    _hBody.dispose();
     widget.filterNotifier?.removeListener(_onExternalFilter);
     super.dispose();
   }
@@ -303,6 +330,7 @@ class _RecordsTabState extends State<_RecordsTab> {
       Container(
         color: AppTheme.background,
         child: SingleChildScrollView(
+          controller: _hHeader,
           scrollDirection: Axis.horizontal,
           child: _tableHeader(),
         ),
@@ -313,6 +341,7 @@ class _RecordsTabState extends State<_RecordsTab> {
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: SingleChildScrollView(
+            controller: _hBody,
             scrollDirection: Axis.horizontal,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               for (final date in dates) ...[

@@ -13,6 +13,41 @@ class AppTheme {
   static const textSecondary = Color(0xFFB0B0B0);
   static const divider = Color(0xFF2C2C2C);
 
+  static ThemeData get light => ThemeData(
+    brightness: Brightness.light,
+    scaffoldBackgroundColor: const Color(0xFFF5F7FA),
+    colorScheme: const ColorScheme.light(
+      primary: primary,
+      secondary: secondary,
+      error: error,
+      surface: Color(0xFFFFFFFF),
+    ),
+    textTheme: GoogleFonts.interTextTheme(ThemeData.light().textTheme),
+    appBarTheme: AppBarTheme(
+      backgroundColor: const Color(0xFFFFFFFF),
+      foregroundColor: const Color(0xFF1A1A2E),
+      elevation: 0,
+      titleTextStyle: GoogleFonts.poppins(
+        color: const Color(0xFF1A1A2E),
+        fontSize: 17,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+    tabBarTheme: TabBarThemeData(
+      labelColor: primary,
+      unselectedLabelColor: const Color(0xFF64748B),
+      indicatorColor: primary,
+      labelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: GoogleFonts.inter(fontSize: 13),
+    ),
+    dividerTheme: const DividerThemeData(color: Color(0xFFE2E8F0), thickness: 1),
+    cardTheme: CardThemeData(
+      color: const Color(0xFFFFFFFF),
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    ),
+  );
+
   static ThemeData get dark => ThemeData(
     brightness: Brightness.dark,
     scaffoldBackgroundColor: background,

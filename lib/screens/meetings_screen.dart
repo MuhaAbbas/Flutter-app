@@ -38,6 +38,8 @@ class _MeetingsScreenState extends State<MeetingsScreen> with SingleTickerProvid
       ),
       body: TabBarView(
         controller: _tab,
+        // Prevent horizontal swipe from switching tabs — conflicts with table scroll
+        physics: const NeverScrollableScrollPhysics(),
         children: const [_AllMeetingsTab(), _LiveTrackingTab()],
       ),
     );
@@ -54,18 +56,62 @@ class _AllMeetingsTab extends StatefulWidget {
 
 class _AllMeetingsTabState extends State<_AllMeetingsTab> {
   List<Map<String, dynamic>> _meetings = [];
+  Map<String, Map<String, dynamic>> _empById = {};
   bool _loading = true;
   String? _error;
   String _statusFilter = 'all';
 
+  // Synced horizontal scroll controllers
+  late final ScrollController _hHeader;
+  late final ScrollController _hBody;
+  bool _hSyncing = false;
+
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _hHeader = ScrollController();
+    _hBody   = ScrollController();
+    _hHeader.addListener(_onHeaderScroll);
+    _hBody.addListener(_onBodyScroll);
+    _load();
+  }
+
+  void _onHeaderScroll() {
+    if (_hSyncing) return;
+    _hSyncing = true;
+    if (_hBody.hasClients) _hBody.jumpTo(_hHeader.offset.clamp(_hBody.position.minScrollExtent, _hBody.position.maxScrollExtent));
+    _hSyncing = false;
+  }
+
+  void _onBodyScroll() {
+    if (_hSyncing) return;
+    _hSyncing = true;
+    if (_hHeader.hasClients) _hHeader.jumpTo(_hBody.offset.clamp(_hHeader.position.minScrollExtent, _hHeader.position.maxScrollExtent));
+    _hSyncing = false;
+  }
+
+  @override
+  void dispose() {
+    _hHeader.dispose();
+    _hBody.dispose();
+    super.dispose();
+  }
 
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final data = await ApiService().getMeetingsAll();
-      if (mounted) setState(() { _meetings = data; _loading = false; });
+      final results = await Future.wait([
+        ApiService().getMeetingsAll(),
+        ApiService().getEmployees(),
+      ]);
+      final meetings = results[0] as List<Map<String, dynamic>>;
+      final employees = results[1] as List<Map<String, dynamic>>;
+      final empById = <String, Map<String, dynamic>>{};
+      for (final e in employees) {
+        final id = (e['id'] ?? e['_id'] ?? '').toString();
+        if (id.isNotEmpty) empById[id] = e;
+      }
+      if (mounted) setState(() { _meetings = meetings; _empById = empById; _loading = false; });
     } catch (e) {
       if (mounted) setState(() { _error = e.toString(); _loading = false; });
     }
@@ -146,7 +192,7 @@ class _AllMeetingsTabState extends State<_AllMeetingsTab> {
       ),
       Container(
         color: AppTheme.background,
-        child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: _tableHeader()),
+        child: SingleChildScrollView(controller: _hHeader, scrollDirection: Axis.horizontal, child: _tableHeader()),
       ),
       const Divider(color: AppTheme.divider, height: 1),
       Expanded(child: RefreshIndicator(
@@ -154,6 +200,7 @@ class _AllMeetingsTabState extends State<_AllMeetingsTab> {
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: SingleChildScrollView(
+            controller: _hBody,
             scrollDirection: Axis.horizontal,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               for (final date in dates) ...[
@@ -200,13 +247,18 @@ class _AllMeetingsTabState extends State<_AllMeetingsTab> {
   }
 
   Widget _meetingRow(Map<String, dynamic> m, bool alt) {
-    final u = m['employee'] is Map ? m['employee'] as Map : (m['user'] is Map ? m['user'] as Map : (m['createdBy'] is Map ? m['createdBy'] as Map : <String, dynamic>{}));
-    final firstName = (m['firstName'] ?? u['firstName'] ?? '').toString();
-    final lastName = (m['lastName'] ?? u['lastName'] ?? '').toString();
+    // Try inline nested user object first, then fall back to employee lookup by userId
+    final u = m['employee'] is Map ? m['employee'] as Map
+        : (m['user'] is Map ? m['user'] as Map
+        : (m['createdBy'] is Map ? m['createdBy'] as Map : <String, dynamic>{}));
+    final userId = (m['userId'] ?? m['user_id'] ?? u['id'] ?? u['_id'] ?? '').toString();
+    final lookedUp = _empById[userId] ?? {};
+    final firstName = (m['firstName'] ?? u['firstName'] ?? lookedUp['firstName'] ?? '').toString();
+    final lastName  = (m['lastName']  ?? u['lastName']  ?? lookedUp['lastName']  ?? '').toString();
     String name = '$firstName $lastName'.trim();
-    if (name.isEmpty) name = (u['name'] ?? u['fullName'] ?? m['employeeName'] ?? '').toString();
-    final email = (m['email'] ?? u['email'] ?? '').toString();
-    final empId = (m['employeeId'] ?? u['employeeId'] ?? m['userEmployeeId'] ?? '').toString();
+    if (name.isEmpty) name = (u['name'] ?? u['fullName'] ?? lookedUp['name'] ?? m['employeeName'] ?? '').toString();
+    final email = (m['email'] ?? u['email'] ?? lookedUp['email'] ?? '').toString();
+    final empId = (m['employeeId'] ?? u['employeeId'] ?? lookedUp['employeeId'] ?? m['userEmployeeId'] ?? '').toString();
     final status = (m['status'] ?? 'upcoming').toString();
     final dateRaw = m['date'] ?? m['meetingDate'] ?? m['startTime'] ?? m['visitDate'] ?? '';
     String dateStr = '—';
