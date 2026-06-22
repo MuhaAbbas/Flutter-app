@@ -371,6 +371,8 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
   late final TextEditingController _firstName;
   late final TextEditingController _lastName;
   late final TextEditingController _contact;
+  late final TextEditingController _newPassword;
+  late final TextEditingController _confirmPassword;
 
   bool _isTeamHead = false;
   bool _isActive = true;
@@ -379,6 +381,9 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
   bool _saving = false;
   bool _deleting = false;
   bool _showReset = false;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
+  bool _settingPassword = false;
   List<Map<String, dynamic>> _depts = [];
   List<Map<String, dynamic>> _roles = [];
   bool _loadingMeta = true;
@@ -390,6 +395,8 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
     _firstName = TextEditingController(text: (e['firstName'] ?? e['first_name'] ?? '').toString());
     _lastName  = TextEditingController(text: (e['lastName']  ?? e['last_name']  ?? '').toString());
     _contact   = TextEditingController(text: (e['contactNumber'] ?? e['phone'] ?? e['contact'] ?? '').toString());
+    _newPassword     = TextEditingController();
+    _confirmPassword = TextEditingController();
     _isTeamHead = e['isTeamHead'] == true || e['isTeamHead'] == 1;
     _isActive   = e['isActive'] == true || e['isActive'] == 1 ||
         e['status']?.toString().toLowerCase() == 'active';
@@ -403,6 +410,7 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
   @override
   void dispose() {
     _firstName.dispose(); _lastName.dispose(); _contact.dispose();
+    _newPassword.dispose(); _confirmPassword.dispose();
     super.dispose();
   }
 
@@ -463,16 +471,38 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
     }
   }
 
-  Future<void> _resetPassword() async {
+  Future<void> _setPassword() async {
+    final pw = _newPassword.text.trim();
+    final cpw = _confirmPassword.text.trim();
+    if (pw.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Enter a new password'), backgroundColor: AppTheme.error));
+      return;
+    }
+    if (pw.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Password must be at least 6 characters'), backgroundColor: AppTheme.error));
+      return;
+    }
+    if (pw != cpw) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Passwords do not match'), backgroundColor: AppTheme.error));
+      return;
+    }
+    setState(() => _settingPassword = true);
     try {
       await ApiService().resetEmployeePassword(
-          (widget.employee['id'] ?? widget.employee['_id'] ?? '').toString());
+          (widget.employee['id'] ?? widget.employee['_id'] ?? '').toString(), pw);
+      _newPassword.clear(); _confirmPassword.clear();
+      setState(() => _showReset = false);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Password reset email sent'), backgroundColor: Color(0xFF4ADE80)));
+          content: Text('Password updated successfully'), backgroundColor: Color(0xFF4ADE80)));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(e.toString().replaceFirst('Exception: ', '')),
           backgroundColor: AppTheme.error));
+    } finally {
+      if (mounted) setState(() => _settingPassword = false);
     }
   }
 
@@ -667,7 +697,7 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
             Text('ACCOUNT ACTIONS', style: AppTheme.label(11, color: AppTheme.textSecondary)),
             const SizedBox(height: 10),
 
-            // Reset Password accordion
+            // Change Password (admin sets directly)
             Container(
               decoration: BoxDecoration(
                 color: AppTheme.background, borderRadius: BorderRadius.circular(10),
@@ -682,7 +712,7 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
                     child: Row(children: [
                       const Icon(Icons.lock_outline, color: AppTheme.textSecondary, size: 18),
                       const SizedBox(width: 10),
-                      Expanded(child: Text('Reset Password', style: AppTheme.body(13))),
+                      Expanded(child: Text('Change Password', style: AppTheme.body(13))),
                       Icon(_showReset ? Icons.expand_less : Icons.expand_more,
                           color: AppTheme.textSecondary, size: 18),
                     ]),
@@ -691,17 +721,64 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
                 if (_showReset)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                    child: SizedBox(width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _resetPassword,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.surfaceElevated,
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    child: Column(children: [
+                      // New password
+                      TextField(
+                        controller: _newPassword,
+                        obscureText: _obscureNew,
+                        style: AppTheme.body(13),
+                        decoration: InputDecoration(
+                          hintText: 'New password',
+                          hintStyle: AppTheme.label(13),
+                          filled: true, fillColor: AppTheme.surface,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.divider)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.divider)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.primary)),
+                          suffixIcon: IconButton(
+                            icon: Icon(_obscureNew ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                size: 18, color: AppTheme.textSecondary),
+                            onPressed: () => setState(() => _obscureNew = !_obscureNew),
+                          ),
                         ),
-                        child: Text('Send Reset Link', style: AppTheme.label(13, color: AppTheme.primary)),
                       ),
-                    ),
+                      const SizedBox(height: 8),
+                      // Confirm password
+                      TextField(
+                        controller: _confirmPassword,
+                        obscureText: _obscureConfirm,
+                        style: AppTheme.body(13),
+                        decoration: InputDecoration(
+                          hintText: 'Confirm password',
+                          hintStyle: AppTheme.label(13),
+                          filled: true, fillColor: AppTheme.surface,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.divider)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.divider)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.primary)),
+                          suffixIcon: IconButton(
+                            icon: Icon(_obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                size: 18, color: AppTheme.textSecondary),
+                            onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _settingPassword ? null : _setPassword,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primary,
+                            padding: const EdgeInsets.symmetric(vertical: 11),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: _settingPassword
+                              ? const SizedBox(width: 16, height: 16,
+                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : Text('Set Password', style: AppTheme.label(13, color: Colors.white, weight: FontWeight.w600)),
+                        ),
+                      ),
+                    ]),
                   ),
               ]),
             ),

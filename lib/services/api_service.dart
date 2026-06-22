@@ -254,22 +254,30 @@ class ApiService {
     }
   }
 
-  Future<void> resetEmployeePassword(String id) async {
+  Future<void> resetEmployeePassword(String id, String newPassword) async {
+    // Try PATCH /users/:id with password field (most common admin override pattern)
     try {
-      await _dio.post('/users/$id/reset-password');
+      await _dio.patch('/users/$id', data: {'password': newPassword});
+      return;
     } on DioException catch (e) {
-      // Try alternate endpoint
-      if (e.response?.statusCode == 404) {
-        try {
-          final emp = await _dio.get('/users/$id');
-          final email = emp.data?['data']?['email'] ?? emp.data?['email'];
-          if (email != null) {
-            await _dio.post('/auth/forgot-password', data: {'email': email});
-            return;
-          }
-        } catch (_) {}
+      if (e.response?.statusCode != 404 && e.response?.statusCode != 422) {
+        throw Exception(e.response?.data?['message'] ?? 'Failed to change password');
       }
-      throw Exception(e.response?.data?['message'] ?? 'Failed to reset password');
+    }
+    // Fallback: dedicated set-password endpoint
+    try {
+      await _dio.post('/users/$id/set-password', data: {'password': newPassword});
+      return;
+    } on DioException catch (e) {
+      if (e.response?.statusCode != 404) {
+        throw Exception(e.response?.data?['message'] ?? 'Failed to change password');
+      }
+    }
+    // Fallback: change-password endpoint
+    try {
+      await _dio.patch('/users/$id/change-password', data: {'newPassword': newPassword});
+    } on DioException catch (e) {
+      throw Exception(e.response?.data?['message'] ?? 'Failed to change password');
     }
   }
 
