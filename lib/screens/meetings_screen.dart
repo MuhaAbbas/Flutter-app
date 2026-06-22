@@ -1,4 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:intl/intl.dart';
+import '../theme/app_theme.dart';
+import '../widgets/status_badge.dart';
+import '../widgets/section_card.dart';
+import '../widgets/custom_app_bar.dart';
+import '../widgets/custom_tab_bar.dart';
 import '../services/api_service.dart';
 
 class MeetingsScreen extends StatefulWidget {
@@ -7,578 +14,445 @@ class MeetingsScreen extends StatefulWidget {
   State<MeetingsScreen> createState() => _MeetingsScreenState();
 }
 
-class _MeetingsScreenState extends State<MeetingsScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  List<Map<String, dynamic>> _meetings = [];
-  List<Map<String, dynamic>> _activeVisits = [];
-  bool _loading = true;
-  String _statusFilter = 'all';
-
-  static const _statuses = ['all', 'pending', 'approved', 'rejected'];
-  static const _statusLabels = {
-    'all': 'All Statuses',
-    'pending': 'Pending',
-    'approved': 'Approved',
-    'rejected': 'Rejected',
-  };
+class _MeetingsScreenState extends State<MeetingsScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tab;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) _loadTab(_tabController.index);
-    });
-    _loadTab(0);
+    _tab = TabController(length: 2, vsync: this);
   }
 
   @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
+  void dispose() { _tab.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      appBar: CustomAppBar(
+        title: 'Meetings',
+        bottomHeight: 44,
+        bottom: CustomTabBar(tabs: const ['All Meetings', 'Live Tracking'], controller: _tab),
+      ),
+      body: TabBarView(
+        controller: _tab,
+        children: const [_AllMeetingsTab(), _LiveTrackingTab()],
+      ),
+    );
+  }
+}
+
+// ── All Meetings Tab ──────────────────────────────────────────────────────────
+
+class _AllMeetingsTab extends StatefulWidget {
+  const _AllMeetingsTab();
+  @override
+  State<_AllMeetingsTab> createState() => _AllMeetingsTabState();
+}
+
+class _AllMeetingsTabState extends State<_AllMeetingsTab> {
+  List<Map<String, dynamic>> _meetings = [];
+  bool _loading = true;
+  String? _error;
+  String _filter = 'all';
+
+  @override
+  void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final data = await ApiService().getMeetings();
+      if (mounted) setState(() { _meetings = data; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
   }
 
-  Future<void> _loadTab(int tab) async {
-    setState(() => _loading = true);
-    if (tab == 0) {
-      final data = await ApiService().getMeetingsAll(status: _statusFilter);
-      if (mounted) setState(() { _meetings = data; _loading = false; });
-    } else {
-      final data = await ApiService().getActiveVisits();
-      if (mounted) setState(() { _activeVisits = data; _loading = false; });
+  Future<void> _approve(String id) async {
+    try {
+      await ApiService().approveLeaveRequest(id);
+      _load();
+    } catch (_) {}
+  }
+
+  Future<void> _reject(String id) async {
+    try {
+      await ApiService().cancelMeeting(id);
+      _load();
+    } catch (_) {}
+  }
+
+  List<Map<String, dynamic>> get _visible => _filter == 'all'
+      ? _meetings
+      : _meetings.where((m) {
+          final s = (m['status'] ?? '').toString().toLowerCase();
+          return s == _filter;
+        }).toList();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      _filterBar(),
+      Expanded(child: _body()),
+    ]);
+  }
+
+  Widget _filterBar() => Container(
+    color: AppTheme.surface,
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    child: SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(children: [
+        for (final f in ['all', 'upcoming', 'ongoing', 'completed', 'cancelled'])
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () => setState(() => _filter = f),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                  color: _filter == f ? AppTheme.primary.withOpacity(0.15) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: _filter == f ? AppTheme.primary : AppTheme.divider),
+                ),
+                child: Text(
+                  '${f[0].toUpperCase()}${f.substring(1)}',
+                  style: AppTheme.label(12,
+                    color: _filter == f ? AppTheme.primary : AppTheme.textSecondary,
+                    weight: _filter == f ? FontWeight.w600 : FontWeight.w400),
+                ),
+              ),
+            ),
+          ),
+      ]),
+    ),
+  );
+
+  Widget _body() {
+    if (_loading) return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
+    if (_error != null) return _errWidget(_error!, _load);
+    if (_visible.isEmpty) return _emptyWidget('No meetings found');
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: AppTheme.primary,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _visible.length,
+        itemBuilder: (_, i) => _card(_visible[i]),
+      ),
+    );
+  }
+
+  Widget _card(Map<String, dynamic> m) {
+    final title = m['title'] ?? m['purpose'] ?? m['subject'] ?? 'Meeting';
+    final status = (m['status'] ?? 'upcoming').toString();
+    final startTime = _fmtTime(m['startTime'] ?? m['date'] ?? m['meetingDate'] ?? '');
+    final endTime = _fmtTime(m['endTime'] ?? '');
+    final location = m['location'] ?? m['venue'] ?? m['link'] ?? '';
+    final participants = m['participants'] as List? ?? m['attendees'] as List? ?? [];
+    final empName = '${m['employee']?['firstName'] ?? m['user']?['firstName'] ?? m['firstName'] ?? ''} ${m['employee']?['lastName'] ?? m['user']?['lastName'] ?? m['lastName'] ?? ''}'.trim();
+    final id = m['id']?.toString() ?? '';
+
+    return GestureDetector(
+      onTap: () => _showDetail(m),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.surface, borderRadius: BorderRadius.circular(14),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6)],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text(title.toString(), style: AppTheme.body(14, color: AppTheme.textPrimary))),
+            StatusBadge(status: status),
+          ]),
+          if (empName.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(children: [
+                const Icon(Icons.person_outline, size: 12, color: AppTheme.textSecondary),
+                const SizedBox(width: 4),
+                Text(empName, style: AppTheme.label(11)),
+              ]),
+            ),
+          const SizedBox(height: 10),
+          Row(children: [
+            if (startTime.isNotEmpty) ...[
+              const Icon(Icons.access_time, size: 12, color: AppTheme.textSecondary),
+              const SizedBox(width: 4),
+              Text('$startTime${endTime.isNotEmpty ? ' → $endTime' : ''}', style: AppTheme.label(11)),
+              const SizedBox(width: 12),
+            ],
+            if (location.toString().isNotEmpty) ...[
+              const Icon(Icons.place_outlined, size: 12, color: AppTheme.textSecondary),
+              const SizedBox(width: 4),
+              Expanded(child: Text(location.toString(), style: AppTheme.label(11), overflow: TextOverflow.ellipsis)),
+            ],
+          ]),
+          if (participants.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _avatarStack(participants),
+          ],
+          if (status.toLowerCase() == 'pending') ...[
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: OutlinedButton(
+                onPressed: () => _reject(id),
+                style: OutlinedButton.styleFrom(side: const BorderSide(color: AppTheme.error), padding: const EdgeInsets.symmetric(vertical: 8)),
+                child: Text('Reject', style: AppTheme.label(12, color: AppTheme.error)),
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: ElevatedButton(
+                onPressed: () => _approve(id),
+                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.secondary, padding: const EdgeInsets.symmetric(vertical: 8)),
+                child: Text('Approve', style: AppTheme.label(12, color: Colors.white)),
+              )),
+            ]),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  Widget _avatarStack(List participants) {
+    final shown = participants.take(4).toList();
+    return Row(children: [
+      ...shown.asMap().entries.map((e) {
+        final p = e.value;
+        final name = '${p['firstName'] ?? p['name'] ?? '?'}';
+        final colors = [AppTheme.primary, AppTheme.secondary, const Color(0xFFC084FC), const Color(0xFFFBBF24)];
+        final color = colors[e.key % colors.length];
+        return Transform.translate(
+          offset: Offset(-e.key * 8.0, 0),
+          child: Container(
+            width: 28, height: 28,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppTheme.surface, width: 2),
+            ),
+            child: Center(child: Text(name[0].toUpperCase(),
+                style: AppTheme.label(10, color: color, weight: FontWeight.w700))),
+          ),
+        );
+      }),
+      if (participants.length > 4)
+        Transform.translate(
+          offset: Offset(-shown.length * 8.0 + 4, 0),
+          child: Text('+${participants.length - 4}', style: AppTheme.label(11)),
+        ),
+    ]);
+  }
+
+  void _showDetail(Map<String, dynamic> m) {
+    final title = m['title'] ?? m['purpose'] ?? 'Meeting';
+    final purpose = m['purpose'] ?? m['description'] ?? '';
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      isScrollControlled: true,
+      builder: (_) => DraggableScrollableSheet(
+        expand: false, initialChildSize: 0.5, maxChildSize: 0.85,
+        builder: (_, ctrl) => ListView(controller: ctrl, padding: const EdgeInsets.all(20), children: [
+          Center(child: Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(color: AppTheme.divider, borderRadius: BorderRadius.circular(2)))),
+          Text(title.toString(), style: AppTheme.heading(16)),
+          const SizedBox(height: 12),
+          if (purpose.toString().isNotEmpty)
+            Text(purpose.toString(), style: AppTheme.label(13)),
+        ]),
+      ),
+    );
+  }
+
+  String _fmtTime(dynamic v) {
+    if (v == null || v.toString().isEmpty) return '';
+    try { return DateFormat('MMM d, hh:mm a').format(DateTime.parse(v.toString()).toLocal()); }
+    catch (_) { return v.toString(); }
+  }
+}
+
+// ── Live Tracking Tab ─────────────────────────────────────────────────────────
+
+class _LiveTrackingTab extends StatefulWidget {
+  const _LiveTrackingTab();
+  @override
+  State<_LiveTrackingTab> createState() => _LiveTrackingTabState();
+}
+
+class _LiveTrackingTabState extends State<_LiveTrackingTab> {
+  List<Map<String, dynamic>> _active = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final all = await ApiService().getMeetings();
+      if (mounted) setState(() {
+        _active = all.where((m) =>
+          (m['status'] ?? '').toString().toLowerCase() == 'ongoing').toList();
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A2E),
-        title: const Text('Meetings & Visits',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-        actions: [
-          IconButton(
-            onPressed: () => _loadTab(_tabController.index),
-            icon: const Icon(Icons.refresh, color: Colors.white70),
-          ),
+      backgroundColor: AppTheme.background,
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          : _error != null
+              ? _errWidget(_error!, _load)
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  color: AppTheme.primary,
+                  child: Column(children: [
+                    _liveHeader(),
+                    Expanded(child: _active.isEmpty
+                        ? _emptyWidget('No meetings currently ongoing')
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _active.length,
+                            itemBuilder: (_, i) => _liveCard(_active[i]),
+                          )),
+                  ]),
+                ),
+    );
+  }
+
+  Widget _liveHeader() => Container(
+    color: AppTheme.surface,
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+    child: Row(children: [
+      _pulseDot(),
+      const SizedBox(width: 10),
+      Text('${_active.length} Meeting${_active.length == 1 ? '' : 's'} Live',
+          style: AppTheme.body(14, color: AppTheme.textPrimary)),
+      const Spacer(),
+      IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppTheme.textSecondary, size: 20)),
+    ]),
+  );
+
+  Widget _pulseDot() => Container(
+    width: 10, height: 10,
+    decoration: const BoxDecoration(color: AppTheme.secondary, shape: BoxShape.circle),
+  ).animate(onPlay: (c) => c.repeat()).scale(
+    begin: const Offset(1, 1),
+    end: const Offset(1.6, 1.6),
+    duration: 900.ms,
+    curve: Curves.easeInOut,
+  ).then().scale(
+    begin: const Offset(1.6, 1.6),
+    end: const Offset(1, 1),
+    duration: 900.ms,
+    curve: Curves.easeInOut,
+  );
+
+  Widget _liveCard(Map<String, dynamic> m) {
+    final title = m['title'] ?? m['purpose'] ?? 'Meeting';
+    final participants = m['participants'] as List? ?? m['attendees'] as List? ?? [];
+    final location = m['location'] ?? m['venue'] ?? '';
+    final startTime = _fmtTime(m['startTime'] ?? m['date'] ?? '');
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.secondary.withOpacity(0.3)),
+        boxShadow: [BoxShadow(color: AppTheme.secondary.withOpacity(0.05), blurRadius: 12)],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          _pulseDot(),
+          const SizedBox(width: 10),
+          Expanded(child: Text(title.toString(), style: AppTheme.body(14))),
+          StatusBadge(status: 'ongoing'),
+        ]),
+        const SizedBox(height: 10),
+        if (startTime.isNotEmpty)
+          Row(children: [
+            const Icon(Icons.access_time, size: 12, color: AppTheme.textSecondary),
+            const SizedBox(width: 4),
+            Text('Started $startTime', style: AppTheme.label(11)),
+          ]),
+        if (location.toString().isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Row(children: [
+            const Icon(Icons.place_outlined, size: 12, color: AppTheme.textSecondary),
+            const SizedBox(width: 4),
+            Text(location.toString(), style: AppTheme.label(11)),
+          ]),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: const Color(0xFF3B82F6),
-          unselectedLabelColor: Colors.white38,
-          indicatorColor: const Color(0xFF3B82F6),
-          tabs: [
-            const Tab(text: 'All Meetings'),
-            Tab(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+        if (participants.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text('Participants (${participants.length})', style: AppTheme.label(12, color: AppTheme.textSecondary)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6, runSpacing: 6,
+            children: participants.take(6).map((p) {
+              final name = '${p['firstName'] ?? p['name'] ?? ''}';
+              final status = (p['attendanceStatus'] ?? p['status'] ?? 'present').toString();
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceElevated,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Container(
-                    width: 7, height: 7,
-                    decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+                    width: 6, height: 6,
+                    decoration: BoxDecoration(
+                      color: status.toLowerCase() == 'present' ? AppTheme.secondary : AppTheme.error,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                   const SizedBox(width: 6),
-                  const Text('Live Tracking'),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildAllMeetings(),
-          _buildLiveTracking(),
-        ],
-      ),
-    );
-  }
-
-  // ── ALL MEETINGS ────────────────────────────────────────────────────────────
-
-  Widget _buildAllMeetings() {
-    return Column(
-      children: [
-        _buildFilterBar(),
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)))
-              : _meetings.isEmpty
-                  ? _emptyState('No meetings found', Icons.location_off_outlined)
-                  : RefreshIndicator(
-                      onRefresh: () => _loadTab(0),
-                      child: _buildGroupedList(_meetings),
-                    ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFilterBar() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
-      color: const Color(0xFF0F172A),
-      child: Row(
-        children: [
-          const Text('Filter:', style: TextStyle(color: Colors.white54, fontSize: 13)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white12),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _statusFilter,
-                  dropdownColor: const Color(0xFF1E293B),
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                  iconEnabledColor: Colors.white38,
-                  items: _statuses.map((s) => DropdownMenuItem(
-                    value: s,
-                    child: Text(_statusLabels[s]!),
-                  )).toList(),
-                  onChanged: (v) {
-                    if (v == null) return;
-                    setState(() => _statusFilter = v);
-                    _loadTab(0);
-                  },
-                ),
-              ),
-            ),
+                  Text(name.isNotEmpty ? name : 'Unknown', style: AppTheme.label(11)),
+                ]),
+              );
+            }).toList(),
           ),
         ],
-      ),
+      ]),
     );
   }
 
-  Widget _buildGroupedList(List<Map<String, dynamic>> meetings) {
-    // Group by date
-    final Map<String, List<Map<String, dynamic>>> grouped = {};
-    for (final m in meetings) {
-      final dateStr = _formatDateKey(m['date'] ?? m['visitDate'] ?? m['createdAt'] ?? '');
-      grouped.putIfAbsent(dateStr, () => []).add(m);
-    }
-
-    final sections = grouped.entries.toList();
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 16),
-      itemCount: sections.length,
-      itemBuilder: (_, i) {
-        final section = sections[i];
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(section.key.toUpperCase(),
-                  style: const TextStyle(
-                      color: Colors.white38, fontSize: 11,
-                      fontWeight: FontWeight.bold, letterSpacing: 0.8)),
-            ),
-            ...section.value.map(_meetingCard),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _meetingCard(Map<String, dynamic> m) {
-    final empName = m['userName'] ?? m['employeeName'] ??
-        '${m['user']?['firstName'] ?? ''} ${m['user']?['lastName'] ?? ''}'.trim();
-    final empId = m['empId'] ?? m['employeeId'] ?? m['user']?['employeeId'] ?? '';
-    final from = m['from'] ?? m['fromLocation'] ?? 'Office';
-    final to = m['to'] ?? m['toLocation'] ?? m['destination'] ?? '';
-    final distance = m['distance'] ?? m['totalKm'];
-    final plan = m['plan'] ?? m['planType'] ?? 'On the spot';
-    final status = (m['status'] ?? 'pending').toString().toLowerCase();
-    final purpose = m['purpose'] ?? m['title'] ?? '';
-    final date = m['date'] ?? m['visitDate'] ?? m['createdAt'] ?? '';
-    final dayAbbr = _dayAbbr(date);
-    final assignedBy = m['approvedBy'] ?? m['assignedBy'];
-
-    final statusColor = status == 'approved'
-        ? Colors.green
-        : status == 'rejected'
-            ? Colors.red
-            : Colors.orange;
-
-    return GestureDetector(
-      onTap: () => _showMeetingDetail(m),
-      child: Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Day column
-          SizedBox(
-            width: 36,
-            child: Column(
-              children: [
-                Text(dayAbbr,
-                    style: const TextStyle(
-                        color: Color(0xFF3B82F6),
-                        fontSize: 12, fontWeight: FontWeight.bold)),
-                const Text('—', style: TextStyle(color: Colors.white24, fontSize: 10)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Employee
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: const Color(0xFF3B82F6).withValues(alpha: 0.2),
-            child: Text(
-              empName.isNotEmpty ? empName[0].toUpperCase() : '?',
-              style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold, fontSize: 12),
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Details
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(empName,
-                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                    if (empId.toString().isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(empId.toString(),
-                            style: const TextStyle(color: Color(0xFF3B82F6), fontSize: 10, fontWeight: FontWeight.bold)),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text('$from → $to',
-                    style: const TextStyle(color: Colors.white54, fontSize: 11),
-                    overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    if (distance != null) ...[
-                      const Icon(Icons.directions_car, color: Colors.white38, size: 11),
-                      const SizedBox(width: 3),
-                      Text('${distance} km',
-                          style: const TextStyle(color: Colors.white38, fontSize: 11)),
-                      const SizedBox(width: 8),
-                    ],
-                    Text(plan.toString(),
-                        style: const TextStyle(color: Colors.white38, fontSize: 11)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(5),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(status[0].toUpperCase() + status.substring(1),
-                              style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
-                          if (assignedBy != null)
-                            Text('assigned by $assignedBy',
-                                style: TextStyle(color: statusColor.withValues(alpha: 0.7), fontSize: 9)),
-                        ],
-                      ),
-                    ),
-                    const Spacer(),
-                    if (purpose.toString().isNotEmpty)
-                      Expanded(
-                        child: Text(purpose.toString(),
-                            style: const TextStyle(color: Colors.white54, fontSize: 11),
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.end),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-      ), // GestureDetector
-    );
-  }
-
-  void _showMeetingDetail(Map<String, dynamic> m) {
-    final empName = m['userName'] ?? m['employeeName'] ??
-        '${m['user']?['firstName'] ?? ''} ${m['user']?['lastName'] ?? ''}'.trim();
-    final from = m['from'] ?? m['fromLocation'] ?? 'Office';
-    final to = m['to'] ?? m['toLocation'] ?? m['destination'] ?? '';
-    final status = (m['status'] ?? 'pending').toString().toLowerCase();
-    final purpose = m['purpose'] ?? m['title'] ?? '';
-    final id = m['id']?.toString() ?? '';
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1E293B),
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setLocal) {
-          bool acting = false;
-          return Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: const Color(0xFF3B82F6).withValues(alpha: 0.2),
-                      child: Text(empName.isNotEmpty ? empName[0].toUpperCase() : '?',
-                          style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold)),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(empName, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-                          Text('$from → $to', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: (status == 'approved' ? Colors.green : status == 'rejected' ? Colors.red : Colors.orange)
-                            .withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(status[0].toUpperCase() + status.substring(1),
-                          style: TextStyle(
-                            color: status == 'approved' ? Colors.green : status == 'rejected' ? Colors.red : Colors.orange,
-                            fontSize: 11, fontWeight: FontWeight.bold,
-                          )),
-                    ),
-                  ],
-                ),
-                if (purpose.toString().isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(purpose.toString(), style: const TextStyle(color: Colors.white54, fontSize: 13)),
-                ],
-                if (status == 'pending' && id.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  const Divider(color: Colors.white12),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: acting ? null : () async {
-                            setLocal(() => acting = true);
-                            try {
-                              await ApiService().approveLeaveRequest(id);
-                              if (ctx.mounted) Navigator.pop(ctx);
-                              _loadTab(0);
-                            } catch (e) {
-                              if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(
-                                SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
-                              setLocal(() => acting = false);
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: const Text('Approve', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: acting ? null : () async {
-                            setLocal(() => acting = true);
-                            try {
-                              await ApiService().cancelMeeting(id);
-                              if (ctx.mounted) Navigator.pop(ctx);
-                              _loadTab(0);
-                            } catch (e) {
-                              if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(
-                                SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
-                              setLocal(() => acting = false);
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: const Text('Reject', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 12),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  // ── LIVE TRACKING ───────────────────────────────────────────────────────────
-
-  Widget _buildLiveTracking() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)));
-    }
-    if (_activeVisits.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.near_me_outlined, size: 56, color: Colors.white.withValues(alpha: 0.15)),
-            const SizedBox(height: 16),
-            const Text('No employees currently on a visit',
-                style: TextStyle(color: Colors.white38, fontSize: 14)),
-            const SizedBox(height: 12),
-            TextButton.icon(
-              onPressed: () => _loadTab(1),
-              icon: const Icon(Icons.refresh, size: 16, color: Color(0xFF3B82F6)),
-              label: const Text('Refresh', style: TextStyle(color: Color(0xFF3B82F6))),
-            ),
-          ],
-        ),
-      );
-    }
-    return RefreshIndicator(
-      onRefresh: () => _loadTab(1),
-      child: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: _activeVisits.length,
-        itemBuilder: (_, i) => _liveVisitCard(_activeVisits[i]),
-      ),
-    );
-  }
-
-  Widget _liveVisitCard(Map<String, dynamic> v) {
-    final name = v['userName'] ?? '';
-    final status = (v['status'] ?? '').toString().replaceAll('_', ' ');
-    final liveKm = v['liveKm'] != null
-        ? '${double.tryParse(v['liveKm'].toString())?.toStringAsFixed(1) ?? 0} km'
-        : '0 km';
-    final dest = v['toLocation'] ?? v['destination'] ?? '';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.green.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        children: [
-          Stack(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: const Color(0xFF3B82F6).withValues(alpha: 0.2),
-                child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
-                    style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold)),
-              ),
-              Positioned(
-                right: 0, bottom: 0,
-                child: Container(
-                  width: 10, height: 10,
-                  decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
-                if (dest.isNotEmpty)
-                  Text(dest, style: const TextStyle(color: Colors.white38, fontSize: 11)),
-                Text(status,
-                    style: const TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.w500)),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              const Icon(Icons.gps_fixed, color: Colors.green, size: 14),
-              Text(liveKm,
-                  style: const TextStyle(color: Colors.green, fontSize: 13, fontWeight: FontWeight.bold)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Helpers ─────────────────────────────────────────────────────────────────
-
-  String _formatDateKey(String isoDate) {
-    if (isoDate.isEmpty) return 'Unknown Date';
-    try {
-      final dt = DateTime.parse(isoDate);
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-      return '${days[dt.weekday - 1]}, ${months[dt.month - 1]} ${dt.day}, ${dt.year}';
-    } catch (_) {
-      return isoDate.substring(0, 10);
-    }
-  }
-
-  String _dayAbbr(String isoDate) {
-    if (isoDate.isEmpty) return '—';
-    try {
-      final dt = DateTime.parse(isoDate);
-      const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-      return days[dt.weekday - 1];
-    } catch (_) {
-      return '—';
-    }
-  }
-
-  Widget _emptyState(String msg, IconData icon) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 48, color: Colors.white.withValues(alpha: 0.15)),
-          const SizedBox(height: 12),
-          Text(msg, style: const TextStyle(color: Colors.white38, fontSize: 14)),
-        ],
-      ),
-    );
+  String _fmtTime(dynamic v) {
+    if (v == null || v.toString().isEmpty) return '';
+    try { return DateFormat('hh:mm a').format(DateTime.parse(v.toString()).toLocal()); }
+    catch (_) { return v.toString(); }
   }
 }
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+Widget _errWidget(String msg, VoidCallback retry) => Center(child: Padding(
+  padding: const EdgeInsets.all(24),
+  child: Column(mainAxisSize: MainAxisSize.min, children: [
+    const Icon(Icons.error_outline, color: AppTheme.error, size: 40),
+    const SizedBox(height: 12),
+    Text(msg.replaceFirst('Exception: ', ''), style: AppTheme.body(13, color: AppTheme.error), textAlign: TextAlign.center),
+    const SizedBox(height: 12),
+    TextButton(onPressed: retry, child: Text('Retry', style: AppTheme.label(13, color: AppTheme.primary))),
+  ]),
+));
+
+Widget _emptyWidget(String msg) => Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+  Icon(Icons.inbox_outlined, size: 48, color: AppTheme.textSecondary.withOpacity(0.4)),
+  const SizedBox(height: 12),
+  Text(msg, style: AppTheme.label(14)),
+]));

@@ -1,5 +1,13 @@
+// ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import '../theme/app_theme.dart';
+import '../widgets/status_badge.dart';
+import '../widgets/section_card.dart';
+import '../widgets/custom_app_bar.dart';
+import '../widgets/custom_tab_bar.dart';
 import '../services/api_service.dart';
 import '../config/api_config.dart';
 
@@ -10,148 +18,179 @@ class AttendanceScreen extends StatefulWidget {
 }
 
 class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  bool _loading = false;
-
-  List<Map<String, dynamic>> _records = [];
-  Map<String, dynamic> _stats = {};
-  List<Map<String, dynamic>> _attRequests = [];
-  List<Map<String, dynamic>> _leaveRequests = [];
+  late final TabController _tab;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) _loadForTab(_tabController.index);
-    });
-    _loadForTab(0);
+    _tab = TabController(length: 4, vsync: this);
   }
 
   @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadForTab(int tab) async {
-    setState(() => _loading = true);
-    try {
-      if (tab == 0) {
-        final data = await ApiService().getAttendanceAll();
-        setState(() {
-          _stats = data['stats'] as Map<String, dynamic>? ?? {};
-          final List list = data['records'] ?? data['items'] ?? data['attendance'] ?? [];
-          _records = list.cast<Map<String, dynamic>>();
-        });
-      } else if (tab == 1) {
-        final data = await ApiService().getAttendanceRequests();
-        setState(() => _attRequests = data);
-      } else if (tab == 2) {
-        final data = await ApiService().getLeaveRequests();
-        setState(() => _leaveRequests = data);
-      }
-    } catch (_) {
-    } finally {
-      setState(() => _loading = false);
-    }
-  }
+  void dispose() { _tab.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A2E),
-        title: const Text('Attendance', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-        actions: [
-          IconButton(
-              onPressed: () => _loadForTab(_tabController.index),
-              icon: const Icon(Icons.refresh, color: Colors.white70)),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: const Color(0xFF3B82F6),
-          unselectedLabelColor: Colors.white38,
-          indicatorColor: const Color(0xFF3B82F6),
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          tabs: const [
-            Tab(text: 'Records'),
-            Tab(text: 'Att. Requests'),
-            Tab(text: 'Leave Requests'),
-            Tab(text: 'Import/Export'),
-          ],
+      backgroundColor: AppTheme.background,
+      appBar: CustomAppBar(
+        title: 'Attendance',
+        bottomHeight: 44,
+        bottom: CustomTabBar(
+          tabs: const ['Records', 'Corrections', 'Leave Requests', 'Import / Export'],
+          controller: _tab,
         ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)))
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildRecordsTab(),
-                _buildAttRequestsTab(),
-                _buildLeaveRequestsTab(),
-                _buildImportExportTab(),
-              ],
-            ),
+      body: TabBarView(
+        controller: _tab,
+        children: const [
+          _RecordsTab(),
+          _CorrectionsTab(),
+          _LeaveTab(),
+          _ImportExportTab(),
+        ],
+      ),
     );
   }
+}
 
-  // ── RECORDS TAB ──────────────────────────────────────────────────────────────
+// ── Records Tab ───────────────────────────────────────────────────────────────
 
-  int _countStatus(String s) => _records.where((r) => r['status'] == s).length;
+class _RecordsTab extends StatefulWidget {
+  const _RecordsTab();
+  @override
+  State<_RecordsTab> createState() => _RecordsTabState();
+}
 
-  Widget _buildRecordsTab() {
-    final present = (_stats['present'] ?? _stats['presentToday']) as int? ?? _countStatus('present');
-    final absent = (_stats['absent'] ?? _stats['absentToday']) as int? ?? _countStatus('absent');
-    final late = (_stats['late'] ?? _stats['lateToday']) as int? ?? _countStatus('late');
-    final total = _records.isNotEmpty ? _records.length : (_stats['total'] ?? 0);
+class _RecordsTabState extends State<_RecordsTab> {
+  List<Map<String, dynamic>> _records = [];
+  Map<String, dynamic> _stats = {};
+  bool _loading = true;
+  String? _error;
+  DateTime _date = DateTime.now();
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              _statCard('Present', present, Colors.green),
+  @override
+  void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final dateStr = DateFormat('yyyy-MM-dd').format(_date);
+      final result = await ApiService().getAttendanceAll(from: dateStr, to: dateStr);
+      if (mounted) setState(() {
+        final raw = result['records'] ?? result['data'] ?? result['attendance'] ?? [];
+        _records = raw is List ? raw.cast<Map<String, dynamic>>() : [];
+        _stats = result['stats'] ?? result['summary'] ?? {};
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  int _cnt(String s) => _records.where((r) => (r['status'] ?? '').toString().toLowerCase() == s).length;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      _dateBar(),
+      if (!_loading && _error == null) _statsRow(),
+      Expanded(child: _body()),
+    ]);
+  }
+
+  Widget _dateBar() {
+    return Container(
+      color: AppTheme.surface,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(children: [
+        IconButton(
+          onPressed: () { setState(() => _date = _date.subtract(const Duration(days: 1))); _load(); },
+          icon: const Icon(Icons.chevron_left, color: AppTheme.textSecondary),
+          padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+        ),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: () async {
+            final p = await showDatePicker(
+              context: context, initialDate: _date,
+              firstDate: DateTime(2020), lastDate: DateTime.now(),
+              builder: (_, c) => Theme(
+                data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: AppTheme.primary)),
+                child: c!,
+              ),
+            );
+            if (p != null) { setState(() => _date = p); _load(); }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(children: [
+              const Icon(Icons.calendar_today, color: AppTheme.primary, size: 14),
               const SizedBox(width: 8),
-              _statCard('Absent', absent, Colors.red),
-              const SizedBox(width: 8),
-              _statCard('Late', late, Colors.orange),
-              const SizedBox(width: 8),
-              _statCard('Total', total, const Color(0xFF3B82F6)),
-            ],
+              Text(DateFormat('EEE, MMM d, yyyy').format(_date),
+                  style: AppTheme.label(13, color: AppTheme.primary, weight: FontWeight.w600)),
+            ]),
           ),
         ),
-        Expanded(
-          child: _records.isEmpty
-              ? const Center(child: Text('No records found', style: TextStyle(color: Colors.white38)))
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  itemCount: _records.length,
-                  itemBuilder: (_, i) => _recordCard(_records[i]),
-                ),
+        const SizedBox(width: 8),
+        IconButton(
+          onPressed: _date.day == DateTime.now().day ? null : () {
+            setState(() => _date = _date.add(const Duration(days: 1))); _load();
+          },
+          icon: Icon(Icons.chevron_right,
+              color: _date.day == DateTime.now().day ? AppTheme.divider : AppTheme.textSecondary),
+          padding: EdgeInsets.zero, constraints: const BoxConstraints(),
         ),
-      ],
+        const Spacer(),
+        IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppTheme.textSecondary, size: 20)),
+      ]),
     );
   }
 
-  Widget _statCard(String label, dynamic value, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-        ),
-        child: Column(
-          children: [
-            Text('$value', style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.bold)),
-            Text(label, style: const TextStyle(color: Colors.white38, fontSize: 10)),
-          ],
-        ),
+  Widget _statsRow() {
+    final present = (_stats['present'] ?? _stats['presentToday']) as int? ?? _cnt('present');
+    final absent = (_stats['absent'] ?? _stats['absentToday']) as int? ?? _cnt('absent');
+    final late = (_stats['late'] ?? _stats['lateToday']) as int? ?? _cnt('late');
+    final leave = (_stats['onLeave'] ?? _stats['leave']) as int? ?? _cnt('leave');
+    return Container(
+      color: AppTheme.surface,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Row(children: [
+        _statChip('Present', present, const Color(0xFF4ADE80)),
+        const SizedBox(width: 10),
+        _statChip('Absent', absent, const Color(0xFFF87171)),
+        const SizedBox(width: 10),
+        _statChip('Late', late, const Color(0xFF60A5FA)),
+        const SizedBox(width: 10),
+        _statChip('Leave', leave, const Color(0xFFFBBF24)),
+      ]),
+    );
+  }
+
+  Widget _statChip(String label, int count, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+    decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+    child: Column(children: [
+      Text('$count', style: GoogleFonts.poppins(color: color, fontSize: 16, fontWeight: FontWeight.w700)),
+      Text(label, style: AppTheme.label(10, color: color)),
+    ]),
+  );
+
+  Widget _body() {
+    if (_loading) return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
+    if (_error != null) return _errWidget(_error!, _load);
+    if (_records.isEmpty) return _emptyWidget('No attendance records for this date');
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: AppTheme.primary,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _records.length,
+        itemBuilder: (_, i) => _recordCard(_records[i]),
       ),
     );
   }
@@ -159,521 +198,497 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   Widget _recordCard(Map<String, dynamic> r) {
     final firstName = r['firstName'] ?? r['user']?['firstName'] ?? '';
     final lastName = r['lastName'] ?? r['user']?['lastName'] ?? '';
-    final name = r['userName'] ?? '$firstName $lastName'.trim();
-    final dept = r['departmentName'] ?? r['department']?['name'] ?? '';
+    final name = '$firstName $lastName'.trim();
     final empId = r['employeeId'] ?? r['userEmployeeId'] ?? r['user']?['employeeId'] ?? '';
-    final date = _formatDate(r['date']?.toString() ?? '');
-    final checkIn = _formatTime(r['checkInTime']?.toString());
-    final checkOut = _formatTime(r['checkOutTime']?.toString());
-    final status = (r['status'] ?? '').toString();
-
-    Color statusColor = Colors.green;
-    if (status == 'late') statusColor = Colors.orange;
-    if (status == 'absent') statusColor = Colors.red;
-    if (status == 'on_leave') statusColor = const Color(0xFF3B82F6);
-
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: const Color(0xFF3B82F6).withValues(alpha: 0.2),
-            child: Text(initial, style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold, fontSize: 12)),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(name.isEmpty ? 'Unknown' : name,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                    if (empId.toString().isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(empId.toString(),
-                            style: const TextStyle(color: Color(0xFF3B82F6), fontSize: 10, fontWeight: FontWeight.bold)),
-                      ),
-                  ],
-                ),
-                Text('${dept.isNotEmpty ? '$dept • ' : ''}$date',
-                    style: const TextStyle(color: Colors.white38, fontSize: 11)),
-                const SizedBox(height: 3),
-                Row(
-                  children: [
-                    const Icon(Icons.login, color: Colors.green, size: 12),
-                    const SizedBox(width: 3),
-                    Text(checkIn, style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                    const SizedBox(width: 10),
-                    const Icon(Icons.logout, color: Colors.red, size: 12),
-                    const SizedBox(width: 3),
-                    Text(checkOut, style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(status.toUpperCase().replaceAll('_', ' '),
-                style: TextStyle(color: statusColor, fontSize: 9, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── ATT. REQUESTS TAB ────────────────────────────────────────────────────────
-
-  Widget _buildAttRequestsTab() {
-    return _attRequests.isEmpty
-        ? const Center(child: Text('No attendance requests', style: TextStyle(color: Colors.white38)))
-        : ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: _attRequests.length,
-            itemBuilder: (_, i) => _attRequestCard(_attRequests[i]),
-          );
-  }
-
-  Widget _attRequestCard(Map<String, dynamic> r) {
-    final firstName = r['firstName'] ?? r['user']?['firstName'] ?? '';
-    final lastName = r['lastName'] ?? r['user']?['lastName'] ?? '';
-    final name = r['userName'] ?? '$firstName $lastName'.trim();
-    final empId = r['employeeId'] ?? r['user']?['employeeId'] ?? '';
-    final date = _formatDate(r['date']?.toString() ?? r['requestDate']?.toString() ?? '');
-    final reason = r['reason'] ?? '';
-    final status = (r['status'] ?? 'pending').toString();
-
-    Color statusColor = Colors.orange;
-    if (status == 'approved') statusColor = Colors.green;
-    if (status == 'rejected') statusColor = Colors.red;
+    final dept = r['department'] ?? r['departmentName'] ?? r['user']?['department']?['name'] ?? '';
+    final status = (r['status'] ?? 'present').toString();
+    final checkIn = _fmtTime(r['checkIn'] ?? r['checkInTime'] ?? '');
+    final checkOut = _fmtTime(r['checkOut'] ?? r['checkOutTime'] ?? '');
+    final hours = r['totalHours'] ?? r['workingHours'] ?? '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6)],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name.isEmpty ? 'Employee' : name,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                    if (empId.toString().isNotEmpty)
-                      Text(empId.toString(), style: const TextStyle(color: Color(0xFF3B82F6), fontSize: 12)),
-                  ],
-                ),
-              ),
+      child: Row(children: [
+        CircleAvatar(
+          radius: 20,
+          backgroundColor: AppTheme.primary.withOpacity(0.12),
+          child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
+              style: AppTheme.label(14, color: AppTheme.primary, weight: FontWeight.w700)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text(name.isEmpty ? 'Employee' : name, style: AppTheme.body(13), overflow: TextOverflow.ellipsis)),
+            if (empId.toString().isNotEmpty) ...[
+              const SizedBox(width: 6),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(status.toUpperCase(),
-                    style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
+                child: Text(empId.toString(), style: AppTheme.label(10, color: AppTheme.primary, weight: FontWeight.w600)),
               ),
             ],
-          ),
+          ]),
+          if (dept.toString().isNotEmpty)
+            Text(dept.toString(), style: AppTheme.label(11)),
           const SizedBox(height: 6),
-          Row(
-            children: [
-              const Icon(Icons.calendar_today, color: Colors.white38, size: 13),
-              const SizedBox(width: 4),
-              Text(date, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-            ],
-          ),
-          if (reason.toString().isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(reason.toString(), style: const TextStyle(color: Colors.white54, fontSize: 12)),
-          ],
-          if (status == 'pending') ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _doAction(() => ApiService().approveAttendanceRequest(r['id']?.toString() ?? ''), 1),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: const Text('Approve', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _doAction(() => ApiService().rejectAttendanceRequest(r['id']?.toString() ?? ''), 1),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: const Text('Reject', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
+          Row(children: [
+            if (checkIn.isNotEmpty) _timeChip(Icons.login, checkIn),
+            if (checkOut.isNotEmpty) ...[const SizedBox(width: 8), _timeChip(Icons.logout, checkOut)],
+            if (hours.toString().isNotEmpty) ...[const SizedBox(width: 8), _timeChip(Icons.timer_outlined, '${hours}h')],
+          ]),
+        ])),
+        const SizedBox(width: 10),
+        StatusBadge(status: status),
+      ]),
+    );
+  }
+
+  Widget _timeChip(IconData icon, String text) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 11, color: AppTheme.textSecondary),
+      const SizedBox(width: 3),
+      Text(text, style: AppTheme.label(10)),
+    ],
+  );
+
+  String _fmtTime(dynamic v) {
+    if (v == null || v.toString().isEmpty) return '';
+    try { return DateFormat('hh:mm a').format(DateTime.parse(v.toString()).toLocal()); }
+    catch (_) { return v.toString().length > 5 ? v.toString().substring(11, 16) : v.toString(); }
+  }
+}
+
+// ── Corrections Tab ───────────────────────────────────────────────────────────
+
+class _CorrectionsTab extends StatefulWidget {
+  const _CorrectionsTab();
+  @override
+  State<_CorrectionsTab> createState() => _CorrectionsTabState();
+}
+
+class _CorrectionsTabState extends State<_CorrectionsTab> {
+  List<Map<String, dynamic>> _requests = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final data = await ApiService().getAttendanceRequests();
+      if (mounted) setState(() { _requests = data; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  Future<void> _approve(String id) async {
+    try {
+      await ApiService().approveAttendanceRequest(id);
+      _load();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.error));
+    }
+  }
+
+  Future<void> _reject(String id) async {
+    try {
+      await ApiService().rejectAttendanceRequest(id);
+      _load();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.error));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
+    if (_error != null) return _errWidget(_error!, _load);
+    if (_requests.isEmpty) return _emptyWidget('No correction requests');
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: AppTheme.primary,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _requests.length,
+        itemBuilder: (_, i) => _reqCard(_requests[i]),
       ),
     );
   }
 
-  // ── LEAVE REQUESTS TAB ───────────────────────────────────────────────────────
-
-  Widget _buildLeaveRequestsTab() {
-    return _leaveRequests.isEmpty
-        ? const Center(child: Text('No leave requests', style: TextStyle(color: Colors.white38)))
-        : ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: _leaveRequests.length,
-            itemBuilder: (_, i) => _leaveCard(_leaveRequests[i]),
-          );
-  }
-
-  Widget _leaveCard(Map<String, dynamic> r) {
-    final firstName = r['firstName'] ?? r['user']?['firstName'] ?? '';
-    final lastName = r['lastName'] ?? r['user']?['lastName'] ?? '';
-    final name = r['userName'] ?? '$firstName $lastName'.trim();
-    final type = r['leaveType'] ?? r['type'] ?? '';
-    final startDate = _formatDate(r['startDate']?.toString() ?? '');
-    final endDate = _formatDate(r['endDate']?.toString() ?? '');
-    final days = r['totalDays'] ?? r['days'] ?? '';
-    final reason = r['reason'] ?? '';
+  Widget _reqCard(Map<String, dynamic> r) {
+    final name = '${r['user']?['firstName'] ?? r['firstName'] ?? ''} ${r['user']?['lastName'] ?? r['lastName'] ?? ''}'.trim();
     final status = (r['status'] ?? 'pending').toString();
-
-    Color statusColor = Colors.orange;
-    if (status == 'approved') statusColor = Colors.green;
-    if (status == 'rejected') statusColor = Colors.red;
-
+    final date = r['date'] ?? r['attendanceDate'] ?? '';
+    final reason = r['reason'] ?? r['description'] ?? '';
+    final id = r['id']?.toString() ?? '';
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        color: AppTheme.surface, borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6)],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name.isEmpty ? 'Employee' : name,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                    if (type.toString().isNotEmpty)
-                      Text(type.toString(), style: const TextStyle(color: Color(0xFF3B82F6), fontSize: 12)),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: Text(name.isEmpty ? 'Employee' : name, style: AppTheme.body(14))),
+          StatusBadge(status: status),
+        ]),
+        if (date.toString().isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text('Date: $date', style: AppTheme.label(12)),
+          ),
+        if (reason.toString().isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(reason.toString(), style: AppTheme.label(12), maxLines: 2, overflow: TextOverflow.ellipsis),
+          ),
+        if (status.toLowerCase() == 'pending') ...[
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: OutlinedButton.icon(
+              onPressed: () => _reject(id),
+              icon: const Icon(Icons.close, size: 14, color: AppTheme.error),
+              label: Text('Reject', style: AppTheme.label(12, color: AppTheme.error)),
+              style: OutlinedButton.styleFrom(side: const BorderSide(color: AppTheme.error), padding: const EdgeInsets.symmetric(vertical: 8)),
+            )),
+            const SizedBox(width: 10),
+            Expanded(child: ElevatedButton.icon(
+              onPressed: () => _approve(id),
+              icon: const Icon(Icons.check, size: 14, color: Colors.white),
+              label: Text('Approve', style: AppTheme.label(12, color: Colors.white)),
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.secondary, padding: const EdgeInsets.symmetric(vertical: 8)),
+            )),
+          ]),
+        ],
+      ]),
+    );
+  }
+}
+
+// ── Leave Requests Tab ────────────────────────────────────────────────────────
+
+class _LeaveTab extends StatefulWidget {
+  const _LeaveTab();
+  @override
+  State<_LeaveTab> createState() => _LeaveTabState();
+}
+
+class _LeaveTabState extends State<_LeaveTab> {
+  List<Map<String, dynamic>> _leaves = [];
+  bool _loading = true;
+  String? _error;
+  String _filter = 'all';
+
+  @override
+  void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final data = await ApiService().getLeaveRequests();
+      if (mounted) setState(() { _leaves = data; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  Future<void> _action(String id, bool approve) async {
+    try {
+      if (approve) {
+        await ApiService().approveLeaveRequest(id);
+      } else {
+        await ApiService().rejectLeaveRequest(id);
+      }
+      _load();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.error));
+    }
+  }
+
+  List<Map<String, dynamic>> get _visible => _filter == 'all'
+      ? _leaves
+      : _leaves.where((l) => (l['status'] ?? '').toString().toLowerCase() == _filter).toList();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      _filterBar(),
+      Expanded(child: _body()),
+    ]);
+  }
+
+  Widget _filterBar() => Container(
+    color: AppTheme.surface,
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    child: SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(children: [
+        for (final f in ['all', 'pending', 'approved', 'rejected'])
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () => setState(() => _filter = f),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                 decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
+                  color: _filter == f ? AppTheme.primary.withOpacity(0.15) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: _filter == f ? AppTheme.primary : AppTheme.divider),
                 ),
-                child: Text(status.toUpperCase(),
-                    style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                child: Text(
+                  '${f[0].toUpperCase()}${f.substring(1)}',
+                  style: AppTheme.label(12, color: _filter == f ? AppTheme.primary : AppTheme.textSecondary,
+                      weight: _filter == f ? FontWeight.w600 : FontWeight.w400),
+                ),
               ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              const Icon(Icons.date_range, color: Colors.white38, size: 13),
-              const SizedBox(width: 4),
-              Text('$startDate — $endDate', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-              if (days.toString().isNotEmpty) ...[
-                const SizedBox(width: 6),
-                Text('($days days)', style: const TextStyle(color: Colors.white38, fontSize: 11)),
-              ],
-            ],
-          ),
-          if (reason.toString().isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(reason.toString(), style: const TextStyle(color: Colors.white54, fontSize: 12)),
-          ],
-          if (status == 'pending') ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _doAction(() => ApiService().approveLeaveRequest(r['id']?.toString() ?? ''), 2),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: const Text('Approve', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _doAction(() => ApiService().rejectLeaveRequest(r['id']?.toString() ?? ''), 2),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: const Text('Reject', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
             ),
-          ],
-        ],
+          ),
+      ]),
+    ),
+  );
+
+  Widget _body() {
+    if (_loading) return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
+    if (_error != null) return _errWidget(_error!, _load);
+    if (_visible.isEmpty) return _emptyWidget('No ${_filter == 'all' ? '' : _filter} leave requests');
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: AppTheme.primary,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _visible.length,
+        itemBuilder: (_, i) => _leaveCard(_visible[i]),
       ),
     );
   }
 
-  // ── IMPORT/EXPORT TAB ────────────────────────────────────────────────────────
-
-  Widget _buildImportExportTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionCard(
-            title: 'Export Data',
-            subtitle: 'Download as Excel or PDF',
-            child: Column(
-              children: [
-                _exportBtn('Attendance Records', Icons.people_outline, Colors.green, '/attendance/export'),
-                const SizedBox(height: 8),
-                _exportBtn('Activity Logs', Icons.timeline, Colors.orange, '/activities/export'),
-                const SizedBox(height: 8),
-                _exportBtn('Payroll Data', Icons.payments_outlined, const Color(0xFF3B82F6), '/payroll/export'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          _sectionCard(
-            title: 'Import Data',
-            subtitle: 'Upload CSV or XLSX to bulk-import records',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Required CSV Format:', style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold)),
-                      SizedBox(height: 6),
-                      Text('employeeId, date, checkIn, checkOut, status',
-                          style: TextStyle(color: Color(0xFF3B82F6), fontSize: 11, fontFamily: 'monospace')),
-                      SizedBox(height: 4),
-                      Text('CS0001, 2026-06-01, 09:00, 17:00, present',
-                          style: TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace')),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () => _showSnack('Import available on web dashboard only'),
-                    icon: const Icon(Icons.upload_file, color: Colors.white38),
-                    label: const Text('Use Web Dashboard to Import', style: TextStyle(color: Colors.white38)),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.white24),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionCard({required String title, required String subtitle, required Widget child}) {
+  Widget _leaveCard(Map<String, dynamic> l) {
+    final name = '${l['user']?['firstName'] ?? l['firstName'] ?? ''} ${l['user']?['lastName'] ?? l['lastName'] ?? ''}'.trim();
+    final status = (l['status'] ?? 'pending').toString();
+    final type = l['leaveType'] ?? l['type'] ?? '';
+    final from = l['startDate'] ?? l['fromDate'] ?? '';
+    final to = l['endDate'] ?? l['toDate'] ?? '';
+    final reason = l['reason'] ?? '';
+    final id = l['id']?.toString() ?? '';
     return Container(
+      margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        color: AppTheme.surface, borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6)],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-          const SizedBox(height: 2),
-          Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 12)),
-          const SizedBox(height: 14),
-          child,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(name.isEmpty ? 'Employee' : name, style: AppTheme.body(14)),
+            if (type.toString().isNotEmpty)
+              Text(type.toString(), style: AppTheme.label(11, color: AppTheme.primary)),
+          ])),
+          StatusBadge(status: status),
+        ]),
+        if (from.toString().isNotEmpty || to.toString().isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(children: [
+              const Icon(Icons.calendar_today, size: 12, color: AppTheme.textSecondary),
+              const SizedBox(width: 6),
+              Text('$from → $to', style: AppTheme.label(12)),
+            ]),
+          ),
+        if (reason.toString().isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(reason.toString(), style: AppTheme.label(12), maxLines: 2, overflow: TextOverflow.ellipsis),
+          ),
+        if (status.toLowerCase() == 'pending') ...[
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: OutlinedButton(
+              onPressed: () => _action(id, false),
+              style: OutlinedButton.styleFrom(side: const BorderSide(color: AppTheme.error), padding: const EdgeInsets.symmetric(vertical: 8)),
+              child: Text('Reject', style: AppTheme.label(12, color: AppTheme.error)),
+            )),
+            const SizedBox(width: 10),
+            Expanded(child: ElevatedButton(
+              onPressed: () => _action(id, true),
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.secondary, padding: const EdgeInsets.symmetric(vertical: 8)),
+              child: Text('Approve', style: AppTheme.label(12, color: Colors.white)),
+            )),
+          ]),
         ],
-      ),
+      ]),
     );
   }
+}
 
-  Widget _exportBtn(String label, IconData icon, Color color, String endpoint) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: () => _showExportSheet(label, endpoint, color),
-        icon: Icon(icon, color: Colors.white, size: 18),
-        label: Text('Export $label', style: const TextStyle(color: Colors.white, fontSize: 13)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      ),
-    );
-  }
+// ── Import / Export Tab ───────────────────────────────────────────────────────
 
-  void _showExportSheet(String label, String endpoint, Color color) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1E293B),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Export $label', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 6),
-            const Text('Select format to download', style: TextStyle(color: Colors.white38, fontSize: 12)),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _showSnack('Opening Excel export...');
-                      // In web, open the URL
-                      _openExportUrl(endpoint, 'xlsx');
-                    },
-                    icon: const Icon(Icons.table_chart, color: Colors.white, size: 18),
-                    label: const Text('Excel (.xlsx)', style: TextStyle(color: Colors.white)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _showSnack('Opening PDF export...');
-                      _openExportUrl(endpoint, 'pdf');
-                    },
-                    icon: const Icon(Icons.picture_as_pdf, color: Colors.white, size: 18),
-                    label: const Text('PDF (.pdf)', style: TextStyle(color: Colors.white)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
-    );
-  }
+class _ImportExportTab extends StatelessWidget {
+  const _ImportExportTab();
 
-  void _openExportUrl(String endpoint, String format) {
+  void _export(String endpoint, String format) {
     final url = '${ApiConfig.baseUrl}$endpoint?format=$format';
     html.window.open(url, '_blank');
   }
 
-  // ── HELPERS ──────────────────────────────────────────────────────────────────
-
-  Future<void> _doAction(Future<void> Function() action, int reloadTab) async {
-    try {
-      await action();
-      if (mounted) _loadForTab(reloadTab);
-    } catch (e) {
-      if (mounted) _showSnack(e.toString().replaceFirst('Exception: ', ''));
-    }
-  }
-
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: const Color(0xFF334155), duration: const Duration(seconds: 2)),
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Export', style: AppTheme.heading(15)),
+        const SizedBox(height: 14),
+        _exportCard(
+          context,
+          title: 'Attendance Records',
+          subtitle: 'Download daily attendance data',
+          icon: Icons.event_note_outlined,
+          color: AppTheme.primary,
+          endpoint: '/attendance/export',
+        ),
+        const SizedBox(height: 10),
+        _exportCard(
+          context,
+          title: 'Activity Logs',
+          subtitle: 'Download employee activity data',
+          icon: Icons.bar_chart_outlined,
+          color: AppTheme.secondary,
+          endpoint: '/activities/export',
+        ),
+        const SizedBox(height: 10),
+        _exportCard(
+          context,
+          title: 'Payroll Data',
+          subtitle: 'Download salary and payroll records',
+          icon: Icons.payments_outlined,
+          color: const Color(0xFFC084FC),
+          endpoint: '/payroll/export',
+        ),
+        const SizedBox(height: 28),
+        Text('Import', style: AppTheme.heading(15)),
+        const SizedBox(height: 14),
+        SectionCard(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                  color: AppTheme.warning.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.upload_file_outlined, color: AppTheme.warning, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Import Attendance (CSV)', style: AppTheme.body(14)),
+                Text('Upload a CSV file with attendance records', style: AppTheme.label(12)),
+              ])),
+            ]),
+            const SizedBox(height: 16),
+            const Divider(color: AppTheme.divider, height: 1),
+            const SizedBox(height: 14),
+            Text('Required CSV Format:', style: AppTheme.label(12, color: AppTheme.primary, weight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: AppTheme.background, borderRadius: BorderRadius.circular(8)),
+              child: Text(
+                'employeeId, date, checkIn, checkOut, status\nCS0001, 2026-06-01, 09:00, 17:00, present\nCS0002, 2026-06-01, 09:15, 17:00, late',
+                style: GoogleFonts.sourceCodePro(color: AppTheme.secondary, fontSize: 11),
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Import via CSV file upload — use the web panel'))),
+                icon: const Icon(Icons.upload_file, size: 18),
+                label: Text('Upload CSV', style: AppTheme.label(13, color: Colors.white, weight: FontWeight.w600)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.warning,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
+          ]),
+        ),
+      ]),
     );
   }
 
-  String _formatTime(String? s) {
-    if (s == null || s.isEmpty) return '--:--';
-    try {
-      final dt = DateTime.parse(s).toLocal();
-      final h = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-      final m = dt.minute.toString().padLeft(2, '0');
-      final p = dt.hour >= 12 ? 'PM' : 'AM';
-      return '$h:$m $p';
-    } catch (_) {
-      return s.length > 5 ? s.substring(0, 5) : s;
-    }
+  Widget _exportCard(BuildContext ctx, {
+    required String title, required String subtitle,
+    required IconData icon, required Color color, required String endpoint,
+  }) {
+    return SectionCard(
+      child: Row(children: [
+        Container(
+          width: 44, height: 44,
+          decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: AppTheme.body(14)),
+          Text(subtitle, style: AppTheme.label(11)),
+        ])),
+        const SizedBox(width: 12),
+        _fmtBtn(ctx, endpoint, 'PDF', Icons.picture_as_pdf, AppTheme.error),
+        const SizedBox(width: 8),
+        _fmtBtn(ctx, endpoint, 'Excel', Icons.table_chart_outlined, AppTheme.secondary),
+      ]),
+    );
   }
 
-  String _formatDate(String s) {
-    if (s.isEmpty) return '';
-    try {
-      final dt = DateTime.parse(s);
-      final months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
-    } catch (_) {
-      return s.length > 10 ? s.substring(0, 10) : s;
-    }
+  Widget _fmtBtn(BuildContext ctx, String endpoint, String fmt, IconData icon, Color color) {
+    return GestureDetector(
+      onTap: () => _export(endpoint, fmt.toLowerCase()),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(fmt, style: AppTheme.label(11, color: color, weight: FontWeight.w600)),
+        ]),
+      ),
+    );
   }
 }
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+Widget _errWidget(String msg, VoidCallback retry) => Center(child: Padding(
+  padding: const EdgeInsets.all(24),
+  child: Column(mainAxisSize: MainAxisSize.min, children: [
+    const Icon(Icons.error_outline, color: AppTheme.error, size: 40),
+    const SizedBox(height: 12),
+    Text(msg.replaceFirst('Exception: ', ''), style: AppTheme.body(13, color: AppTheme.error), textAlign: TextAlign.center),
+    const SizedBox(height: 12),
+    TextButton(onPressed: retry, child: Text('Retry', style: AppTheme.label(13, color: AppTheme.primary))),
+  ]),
+));
+
+Widget _emptyWidget(String msg) => Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+  Icon(Icons.inbox_outlined, size: 48, color: AppTheme.textSecondary.withOpacity(0.4)),
+  const SizedBox(height: 12),
+  Text(msg, style: AppTheme.label(14)),
+]));

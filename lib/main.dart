@@ -3,6 +3,7 @@ import 'services/auth_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/admin_main.dart';
 import 'screens/employee_main.dart';
+import 'theme/app_theme.dart' as theme_pkg;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,10 +18,7 @@ class AttendanceApp extends StatelessWidget {
     return MaterialApp(
       title: 'Attendance System',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3B82F6), brightness: Brightness.dark),
-        useMaterial3: true,
-      ),
+      theme: theme_pkg.AppTheme.dark,
       home: const _SplashRouter(),
     );
   }

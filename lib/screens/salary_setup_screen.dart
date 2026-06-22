@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_theme.dart';
+import '../widgets/status_badge.dart';
+import '../widgets/section_card.dart';
+import '../widgets/custom_app_bar.dart';
 import '../services/api_service.dart';
 
 class SalarySetupScreen extends StatefulWidget {
@@ -18,13 +23,11 @@ class _SalarySetupScreenState extends State<SalarySetupScreen> {
   void initState() {
     super.initState();
     _load();
+    _searchCtrl.addListener(() { setState(() => _search = _searchCtrl.text); });
   }
 
   @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
+  void dispose() { _searchCtrl.dispose(); super.dispose(); }
 
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
@@ -32,253 +35,180 @@ class _SalarySetupScreenState extends State<SalarySetupScreen> {
       final data = await ApiService().getSalarySetupsWithError(search: _search.isNotEmpty ? _search : null);
       if (mounted) setState(() { _setups = data; _loading = false; });
     } catch (e) {
-      if (mounted) setState(() { _error = e.toString().replaceFirst('Exception: ', ''); _loading = false; });
-    }
-  }
-
-  Future<void> _delete(String id, String name) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Delete Setup', style: TextStyle(color: Colors.white)),
-        content: Text('Remove salary setup for $name?',
-            style: const TextStyle(color: Colors.white54)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white38))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      await ApiService().deleteSalarySetup(id);
-      await _load();
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A2E),
-        title: const Text('Salary Setup',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+      backgroundColor: AppTheme.background,
+      appBar: CustomAppBar(
+        title: 'Salary Setup',
         actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: Colors.white70)),
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppTheme.textSecondary)),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-            child: TextField(
-              controller: _searchCtrl,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              onChanged: (v) {
-                setState(() => _search = v);
-                _load();
-              },
-              decoration: InputDecoration(
-                hintText: 'Search employees...',
-                hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
-                prefixIcon: const Icon(Icons.search, color: Colors.white38, size: 18),
-                filled: true,
-                fillColor: const Color(0xFF1E293B),
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              ),
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+          child: TextField(
+            controller: _searchCtrl,
+            style: AppTheme.body(13),
+            onChanged: (_) => _load(),
+            decoration: InputDecoration(
+              hintText: 'Search employees...',
+              hintStyle: AppTheme.label(13),
+              prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondary, size: 18),
+              filled: true,
+              fillColor: AppTheme.surface,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
             ),
           ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)))
-                : _error != null
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.error_outline, color: Colors.red, size: 40),
-                              const SizedBox(height: 12),
-                              Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13), textAlign: TextAlign.center),
-                              const SizedBox(height: 12),
-                              TextButton(onPressed: _load, child: const Text('Retry', style: TextStyle(color: Color(0xFF3B82F6)))),
-                            ],
-                          ),
-                        ),
-                      )
-                    : _setups.isEmpty
-                        ? const Center(
-                            child: Text('No salary setups found',
-                                style: TextStyle(color: Colors.white38)))
-                        : RefreshIndicator(
-                            onRefresh: _load,
-                            child: ListView.builder(
-                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                              itemCount: _setups.length,
-                              itemBuilder: (_, i) => _setupCard(_setups[i]),
-                            ),
-                          ),
-          ),
-        ],
+        ),
+        Expanded(child: _body()),
+      ]),
+    );
+  }
+
+  Widget _body() {
+    if (_loading) return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
+    if (_error != null) return Center(child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.error_outline, color: AppTheme.error, size: 40),
+        const SizedBox(height: 12),
+        Text(_error!.replaceFirst('Exception: ', ''), style: AppTheme.body(13, color: AppTheme.error), textAlign: TextAlign.center),
+        const SizedBox(height: 12),
+        TextButton(onPressed: _load, child: Text('Retry', style: AppTheme.label(13, color: AppTheme.primary))),
+      ]),
+    ));
+    if (_setups.isEmpty) return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Icon(Icons.inbox_outlined, size: 48, color: AppTheme.textSecondary.withOpacity(0.4)),
+      const SizedBox(height: 12),
+      Text('No salary setups found', style: AppTheme.label(14)),
+    ]));
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: AppTheme.primary,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        itemCount: _setups.length,
+        itemBuilder: (_, i) => _setupCard(_setups[i]),
       ),
     );
   }
 
   Widget _setupCard(Map<String, dynamic> s) {
-    final firstName = s['user']?['firstName'] ?? s['firstName'] ?? '';
-    final lastName = s['user']?['lastName'] ?? s['lastName'] ?? '';
-    final name = '$firstName $lastName'.trim();
+    final name = '${s['user']?['firstName'] ?? s['firstName'] ?? ''} ${s['user']?['lastName'] ?? s['lastName'] ?? ''}'.trim();
     final email = s['user']?['email'] ?? s['email'] ?? '';
     final empId = s['user']?['employeeId'] ?? s['empId'] ?? s['employeeId'] ?? '';
-    final dept = s['user']?['department']?['name'] ?? s['department'] ?? s['departmentName'] ?? '';
-    final baseSalary = double.tryParse((s['basicSalary'] ?? s['baseSalary'] ?? 0).toString()) ?? 0;
-    final allowances = double.tryParse((s['totalAllowances'] ?? s['allowances'] ?? 0).toString()) ?? 0;
+    final dept = s['user']?['department']?['name'] ?? s['department'] ?? '';
+    final basic = double.tryParse((s['basicSalary'] ?? s['baseSalary'] ?? 0).toString()) ?? 0;
+    final net = double.tryParse((s['netSalary'] ?? s['net'] ?? 0).toString()) ?? 0;
     final deductions = double.tryParse((s['totalDeductions'] ?? s['deductions'] ?? 0).toString()) ?? 0;
-    final netSalary = double.tryParse((s['netSalary'] ?? s['net'] ?? 0).toString()) ?? 0;
-    final configured = s['isConfigured'] ?? s['configured'] ?? baseSalary > 0;
+    final configured = s['isConfigured'] == true || s['configured'] == true || basic > 0;
     final id = s['id']?.toString() ?? '';
     final userId = s['userId']?.toString() ?? s['user']?['id']?.toString() ?? '';
 
-    final colors = [
-      const Color(0xFF3B82F6), Colors.purple, Colors.teal, Colors.orange, Colors.pink,
-    ];
-    final colorIdx = name.isNotEmpty ? name.codeUnitAt(0) % colors.length : 0;
-    final avatarColor = colors[colorIdx];
-
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        color: AppTheme.surface, borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6)],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: avatarColor.withValues(alpha: 0.2),
-                child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
-                    style: TextStyle(color: avatarColor, fontWeight: FontWeight.bold, fontSize: 13)),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
-                        overflow: TextOverflow.ellipsis),
-                    if (email.isNotEmpty)
-                      Text(email,
-                          style: const TextStyle(color: Colors.white38, fontSize: 10),
-                          overflow: TextOverflow.ellipsis),
-                  ],
-                ),
-              ),
-              if (empId.toString().isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(empId.toString(),
-                      style: const TextStyle(color: Color(0xFF3B82F6), fontSize: 10, fontWeight: FontWeight.bold)),
-                ),
-            ],
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: AppTheme.primary.withOpacity(0.12),
+            child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
+                style: AppTheme.label(14, color: AppTheme.primary, weight: FontWeight.w700)),
           ),
-          const SizedBox(height: 8),
-          const Divider(color: Colors.white12, height: 1),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              if (dept.isNotEmpty)
-                Expanded(
-                  child: Text(dept.toString(),
-                      style: const TextStyle(color: Colors.white38, fontSize: 11),
-                      overflow: TextOverflow.ellipsis),
-                ),
-              const Spacer(),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(name.isEmpty ? 'Employee' : name, style: AppTheme.body(13)),
+            if (email.toString().isNotEmpty) Text(email.toString(), style: AppTheme.label(10), overflow: TextOverflow.ellipsis),
+          ])),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            if (empId.toString().isNotEmpty)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: configured
-                      ? Colors.green.withValues(alpha: 0.15)
-                      : Colors.white.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(configured ? 'Configured' : 'Not Set',
-                    style: TextStyle(
-                        color: configured ? Colors.green : Colors.white38,
-                        fontSize: 10, fontWeight: FontWeight.bold)),
+                decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                child: Text(empId.toString(), style: AppTheme.label(9, color: AppTheme.primary, weight: FontWeight.w600)),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _salaryChip('Base', baseSalary, Colors.white),
-              const SizedBox(width: 6),
-              _salaryChip('+Allow', allowances, Colors.green),
-              const SizedBox(width: 6),
-              _salaryChip('-Deduct', deductions, Colors.red),
-              const SizedBox(width: 6),
-              _salaryChip('Net', netSalary, const Color(0xFF3B82F6)),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.edit_outlined, color: Color(0xFF3B82F6), size: 18),
-                onPressed: () => _openEdit(s, userId),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                tooltip: 'Edit',
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
-                onPressed: () => _delete(id, name),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                tooltip: 'Delete',
-              ),
-            ],
-          ),
-        ],
-      ),
+            const SizedBox(height: 4),
+            StatusBadge(status: configured ? 'active' : 'pending', fontSize: 10),
+          ]),
+        ]),
+        const SizedBox(height: 12),
+        const Divider(height: 1, color: AppTheme.divider),
+        const SizedBox(height: 12),
+        Row(children: [
+          if (dept.toString().isNotEmpty)
+            Expanded(child: Row(children: [
+              const Icon(Icons.business_outlined, size: 11, color: AppTheme.textSecondary),
+              const SizedBox(width: 4),
+              Expanded(child: Text(dept.toString(), style: AppTheme.label(11), overflow: TextOverflow.ellipsis)),
+            ])),
+          _amtCol('Basic', basic),
+          const SizedBox(width: 16),
+          _amtCol('Deductions', deductions, color: AppTheme.error),
+          const SizedBox(width: 16),
+          _amtCol('Net', net, color: AppTheme.secondary),
+          const Spacer(),
+          Row(children: [
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, color: AppTheme.primary, size: 18),
+              onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => SalarySetupEditScreen(setup: s, userId: userId))
+              ).then((_) => _load()),
+              padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+              tooltip: 'Edit',
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: AppTheme.error, size: 18),
+              onPressed: () async {
+                final ok = await _confirmDelete(name);
+                if (ok == true) { await ApiService().deleteSalarySetup(id); _load(); }
+              },
+              padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+              tooltip: 'Delete',
+            ),
+          ]),
+        ]),
+      ]),
     );
   }
 
-  Widget _salaryChip(String label, double value, Color color) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(color: Colors.white24, fontSize: 9)),
-        Text('${_fmt(value)}',
-            style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+  Widget _amtCol(String label, double value, {Color? color}) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label, style: AppTheme.label(9)),
+      Text(_fmt(value), style: AppTheme.label(11, color: color ?? AppTheme.textPrimary, weight: FontWeight.w600)),
+    ],
+  );
+
+  Future<bool?> _confirmDelete(String name) => showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      backgroundColor: AppTheme.surfaceElevated,
+      title: Text('Delete Setup', style: AppTheme.heading(16)),
+      content: Text('Remove salary setup for $name?', style: AppTheme.label(13)),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: AppTheme.label(13))),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: AppTheme.error),
+          onPressed: () => Navigator.pop(context, true),
+          child: Text('Delete', style: AppTheme.label(13, color: Colors.white)),
+        ),
       ],
-    );
-  }
-
-  void _openEdit(Map<String, dynamic> setup, String userId) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => SalarySetupEditScreen(setup: setup, userId: userId),
-      ),
-    ).then((_) => _load());
-  }
+    ),
+  );
 
   String _fmt(double v) {
     if (v == 0) return 'PKR 0';
@@ -292,23 +222,19 @@ class _SalarySetupScreenState extends State<SalarySetupScreen> {
   }
 }
 
-// ── Salary Setup Edit Screen ─────────────────────────────────────────────────
+// ── Edit Screen ───────────────────────────────────────────────────────────────
 
 class SalarySetupEditScreen extends StatefulWidget {
   final Map<String, dynamic> setup;
   final String userId;
-
   const SalarySetupEditScreen({super.key, required this.setup, required this.userId});
-
   @override
   State<SalarySetupEditScreen> createState() => _SalarySetupEditScreenState();
 }
 
 class _SalarySetupEditScreenState extends State<SalarySetupEditScreen> {
   bool _saving = false;
-  bool _deleting = false;
 
-  // Earnings controllers
   late final TextEditingController _basicCtrl;
   late final TextEditingController _housingCtrl;
   late final TextEditingController _transportCtrl;
@@ -318,8 +244,6 @@ class _SalarySetupEditScreenState extends State<SalarySetupEditScreen> {
   late final TextEditingController _mobileCtrl;
   late final TextEditingController _commissionCtrl;
   late final TextEditingController _miscCtrl;
-
-  // Deductions controllers
   late final TextEditingController _taxPctCtrl;
   late final TextEditingController _insuranceCtrl;
   late final TextEditingController _advanceCtrl;
@@ -332,40 +256,28 @@ class _SalarySetupEditScreenState extends State<SalarySetupEditScreen> {
     super.initState();
     final s = widget.setup;
     _basicCtrl = TextEditingController(text: _v(s['basicSalary'] ?? s['baseSalary']));
-    _housingCtrl = TextEditingController(text: _v(s['housingAllowance'] ?? s['houseAllowance']));
-    _transportCtrl = TextEditingController(text: _v(s['transportAllowance'] ?? s['transport']));
-    _medicalCtrl = TextEditingController(text: _v(s['medicalAllowance'] ?? s['medical']));
-    _mealCtrl = TextEditingController(text: _v(s['mealAllowance'] ?? s['meal']));
+    _housingCtrl = TextEditingController(text: _v(s['housingAllowance']));
+    _transportCtrl = TextEditingController(text: _v(s['transportAllowance']));
+    _medicalCtrl = TextEditingController(text: _v(s['medicalAllowance']));
+    _mealCtrl = TextEditingController(text: _v(s['mealAllowance']));
     _overtimeCtrl = TextEditingController(text: _v(s['overtime']));
-    _mobileCtrl = TextEditingController(text: _v(s['mobileAllowance'] ?? s['mobile']));
+    _mobileCtrl = TextEditingController(text: _v(s['mobileAllowance']));
     _commissionCtrl = TextEditingController(text: _v(s['commission']));
-    _miscCtrl = TextEditingController(text: _v(s['miscAllowance'] ?? s['misc']));
-    _taxPctCtrl = TextEditingController(text: _v(s['incomeTaxPercent'] ?? s['taxPercent'] ?? s['tax']));
+    _miscCtrl = TextEditingController(text: _v(s['miscAllowance']));
+    _taxPctCtrl = TextEditingController(text: _v(s['incomeTaxPercent'] ?? s['taxPercent']));
     _insuranceCtrl = TextEditingController(text: _v(s['insurance']));
     _advanceCtrl = TextEditingController(text: _v(s['advance']));
     _fineCtrl = TextEditingController(text: _v(s['fine']));
-
     final ef = s['effectiveFrom'];
-    if (ef != null) {
-      try { _effectiveFrom = DateTime.parse(ef.toString()); } catch (_) {}
-    }
-
-    for (final c in _allControllers) {
-      c.addListener(() => setState(() {}));
-    }
+    if (ef != null) { try { _effectiveFrom = DateTime.parse(ef.toString()); } catch (_) {} }
+    for (final c in _allCtrls) c.addListener(() => setState(() {}));
   }
 
-  List<TextEditingController> get _allControllers => [
-    _basicCtrl, _housingCtrl, _transportCtrl, _medicalCtrl, _mealCtrl,
-    _overtimeCtrl, _mobileCtrl, _commissionCtrl, _miscCtrl,
-    _taxPctCtrl, _insuranceCtrl, _advanceCtrl, _fineCtrl,
-  ];
+  List<TextEditingController> get _allCtrls => [_basicCtrl, _housingCtrl, _transportCtrl, _medicalCtrl,
+    _mealCtrl, _overtimeCtrl, _mobileCtrl, _commissionCtrl, _miscCtrl, _taxPctCtrl, _insuranceCtrl, _advanceCtrl, _fineCtrl];
 
   @override
-  void dispose() {
-    for (final c in _allControllers) c.dispose();
-    super.dispose();
-  }
+  void dispose() { for (final c in _allCtrls) c.dispose(); super.dispose(); }
 
   String _v(dynamic val) {
     if (val == null) return '0';
@@ -374,390 +286,184 @@ class _SalarySetupEditScreenState extends State<SalarySetupEditScreen> {
   }
 
   double _d(TextEditingController c) => double.tryParse(c.text) ?? 0;
-
-  double get _grossSalary => _d(_basicCtrl) + _totalAllowances;
-  double get _totalAllowances =>
-      _d(_housingCtrl) + _d(_transportCtrl) + _d(_medicalCtrl) +
-      _d(_mealCtrl) + _d(_overtimeCtrl) + _d(_mobileCtrl) +
-      _d(_commissionCtrl) + _d(_miscCtrl);
-  double get _taxAmount => _grossSalary * (_d(_taxPctCtrl) / 100);
-  double get _totalDeductions => _taxAmount + _d(_insuranceCtrl) + _d(_advanceCtrl) + _d(_fineCtrl);
-  double get _netSalary => _grossSalary - _totalDeductions;
+  double get _gross => _d(_basicCtrl) + _totalAllow;
+  double get _totalAllow => _d(_housingCtrl) + _d(_transportCtrl) + _d(_medicalCtrl) +
+      _d(_mealCtrl) + _d(_overtimeCtrl) + _d(_mobileCtrl) + _d(_commissionCtrl) + _d(_miscCtrl);
+  double get _taxAmt => _gross * (_d(_taxPctCtrl) / 100);
+  double get _totalDed => _taxAmt + _d(_insuranceCtrl) + _d(_advanceCtrl) + _d(_fineCtrl);
+  double get _net => _gross - _totalDed;
 
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
       await ApiService().saveSalarySetup(widget.userId, {
-        'basicSalary': _d(_basicCtrl),
-        'housingAllowance': _d(_housingCtrl),
-        'transportAllowance': _d(_transportCtrl),
-        'medicalAllowance': _d(_medicalCtrl),
-        'mealAllowance': _d(_mealCtrl),
-        'overtime': _d(_overtimeCtrl),
-        'mobileAllowance': _d(_mobileCtrl),
-        'commission': _d(_commissionCtrl),
-        'miscAllowance': _d(_miscCtrl),
-        'incomeTaxPercent': _d(_taxPctCtrl),
-        'insurance': _d(_insuranceCtrl),
-        'advance': _d(_advanceCtrl),
-        'fine': _d(_fineCtrl),
-        'currency': 'PKR',
-        'effectiveFrom': _effectiveFrom.toIso8601String().substring(0, 10),
+        'basicSalary': _d(_basicCtrl), 'housingAllowance': _d(_housingCtrl),
+        'transportAllowance': _d(_transportCtrl), 'medicalAllowance': _d(_medicalCtrl),
+        'mealAllowance': _d(_mealCtrl), 'overtime': _d(_overtimeCtrl),
+        'mobileAllowance': _d(_mobileCtrl), 'commission': _d(_commissionCtrl),
+        'miscAllowance': _d(_miscCtrl), 'incomeTaxPercent': _d(_taxPctCtrl),
+        'insurance': _d(_insuranceCtrl), 'advance': _d(_advanceCtrl), 'fine': _d(_fineCtrl),
+        'currency': 'PKR', 'effectiveFrom': _effectiveFrom.toIso8601String().substring(0, 10),
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Salary structure saved'), backgroundColor: Colors.green),
-        );
-        Navigator.pop(context);
-      }
+      if (mounted) { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saved successfully'), backgroundColor: AppTheme.secondary)); }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red),
-      );
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  Future<void> _delete() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Delete Setup', style: TextStyle(color: Colors.white)),
-        content: const Text('This will remove the salary structure permanently.',
-            style: TextStyle(color: Colors.white54)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white38))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      setState(() => _deleting = true);
-      final id = widget.setup['id']?.toString() ?? '';
-      await ApiService().deleteSalarySetup(id);
-      if (mounted) Navigator.pop(context);
-    }
+        SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.error));
+    } finally { if (mounted) setState(() => _saving = false); }
   }
 
   @override
   Widget build(BuildContext context) {
-    final firstName = widget.setup['user']?['firstName'] ??
-        widget.setup['firstName'] ?? '';
-    final lastName = widget.setup['user']?['lastName'] ??
-        widget.setup['lastName'] ?? '';
-    final name = '$firstName $lastName'.trim();
-
+    final name = '${widget.setup['user']?['firstName'] ?? widget.setup['firstName'] ?? ''} ${widget.setup['user']?['lastName'] ?? widget.setup['lastName'] ?? ''}'.trim();
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A2E),
-        leading: IconButton(
-          onPressed: () => Navigator.pop(context),
-          icon: const Icon(Icons.arrow_back, color: Colors.white70),
-        ),
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: const Color(0xFF3B82F6).withValues(alpha: 0.2),
-              child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
-                  style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold, fontSize: 12)),
-            ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Salary Setup',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                Text(name,
-                    style: const TextStyle(color: Color(0xFF3B82F6), fontSize: 11)),
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          if (_deleting)
-            const Padding(padding: EdgeInsets.all(12),
-                child: SizedBox(width: 18, height: 18,
-                    child: CircularProgressIndicator(color: Colors.red, strokeWidth: 2)))
-          else
-            TextButton(
-              onPressed: _delete,
-              child: const Text('Delete Setup', style: TextStyle(color: Colors.red, fontSize: 12)),
-            ),
-        ],
-      ),
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Form
-          Expanded(
-            flex: 3,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _sectionTitle('Earnings'),
-                  _grid2([
-                    _earnField('Base Salary', _basicCtrl),
-                    _earnField('Housing Allowance', _housingCtrl),
-                    _earnField('Transport Allowance', _transportCtrl),
-                    _earnField('Medical Allowance', _medicalCtrl),
-                    _earnField('Meal / Lunch Allowance', _mealCtrl),
-                    _earnField('Overtime', _overtimeCtrl),
-                    _earnField('Mobile Allowance', _mobileCtrl),
-                    _earnField('Commission', _commissionCtrl),
-                  ]),
-                  _fullField('Misc Allowance', _miscCtrl),
-                  const SizedBox(height: 16),
-                  _sectionTitle('Deductions'),
-                  _grid2([
-                    _earnField('Income Tax %', _taxPctCtrl, prefix: '%'),
-                    _earnField('Insurance', _insuranceCtrl),
-                    _earnField('Advance', _advanceCtrl),
-                    _earnField('Fine', _fineCtrl),
-                  ]),
-                  const SizedBox(height: 16),
-                  _sectionTitle('Other'),
-                  _infoField('Currency', 'PKR - Pakistani Rupee'),
-                  const SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _effectiveFrom,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime(2030),
-                        builder: (ctx, child) => Theme(
-                          data: ThemeData.dark().copyWith(
-                              colorScheme: const ColorScheme.dark(primary: Color(0xFF3B82F6))),
-                          child: child!,
-                        ),
-                      );
-                      if (picked != null) setState(() => _effectiveFrom = picked);
-                    },
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Effective From',
-                            style: TextStyle(color: Colors.white38, fontSize: 11)),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.white12),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.calendar_today, color: Colors.white38, size: 14),
-                              const SizedBox(width: 8),
-                              Text(
-                                '${_effectiveFrom.month.toString().padLeft(2, '0')}/'
-                                '${_effectiveFrom.day.toString().padLeft(2, '0')}/'
-                                '${_effectiveFrom.year}',
-                                style: const TextStyle(color: Colors.white, fontSize: 13),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _saving ? null : _save,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3B82F6),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      child: _saving
-                          ? const SizedBox(width: 18, height: 18,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Text('Save Salary Structure',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                ],
+      backgroundColor: AppTheme.background,
+      appBar: CustomAppBar(title: 'Salary Setup — $name', showBack: true),
+      body: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(flex: 3, child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _section('Earnings'),
+            _grid2([
+              _field('Basic Salary', _basicCtrl),
+              _field('Housing Allowance', _housingCtrl),
+              _field('Transport Allowance', _transportCtrl),
+              _field('Medical Allowance', _medicalCtrl),
+              _field('Meal / Lunch', _mealCtrl),
+              _field('Overtime', _overtimeCtrl),
+              _field('Mobile Allowance', _mobileCtrl),
+              _field('Commission', _commissionCtrl),
+            ]),
+            _field('Misc Allowance', _miscCtrl),
+            const SizedBox(height: 20),
+            _section('Deductions'),
+            _grid2([
+              _field('Income Tax %', _taxPctCtrl, prefix: '%'),
+              _field('Insurance', _insuranceCtrl),
+              _field('Advance', _advanceCtrl),
+              _field('Fine', _fineCtrl),
+            ]),
+            const SizedBox(height: 20),
+            _section('Other'),
+            _datePicker(),
+            const SizedBox(height: 20),
+            SizedBox(width: double.infinity, child: ElevatedButton(
+              onPressed: _saving ? null : _save,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-            ),
+              child: _saving
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Text('Save Salary Structure', style: AppTheme.label(14, color: Colors.white, weight: FontWeight.w600)),
+            )),
+            const SizedBox(height: 20),
+          ]),
+        )),
+        Expanded(flex: 2, child: Container(
+          margin: const EdgeInsets.fromLTRB(0, 16, 16, 16),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppTheme.surface, borderRadius: BorderRadius.circular(16),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8)],
           ),
-          // Breakdown
-          Expanded(
-            flex: 2,
-            child: Container(
-              margin: const EdgeInsets.fromLTRB(0, 14, 14, 14),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Salary Breakdown',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                  const SizedBox(height: 12),
-                  _bRow('Gross Salary', _grossSalary, Colors.white),
-                  const Divider(color: Colors.white12, height: 16),
-                  _bRow('Housing', _d(_housingCtrl), Colors.white54, small: true),
-                  _bRow('Transport', _d(_transportCtrl), Colors.white54, small: true),
-                  _bRow('Medical', _d(_medicalCtrl), Colors.white54, small: true),
-                  _bRow('Lunch', _d(_mealCtrl), Colors.white54, small: true),
-                  _bRow('Overtime', _d(_overtimeCtrl), Colors.white54, small: true),
-                  _bRow('Mobile', _d(_mobileCtrl), Colors.white54, small: true),
-                  _bRow('Commission', _d(_commissionCtrl), Colors.white54, small: true),
-                  _bRow('Misc', _d(_miscCtrl), Colors.white54, small: true),
-                  _bRow('Total Allowances', _totalAllowances, Colors.white),
-                  const Divider(color: Colors.white12, height: 16),
-                  _bRow('Tax (${_taxPctCtrl.text}%)', _taxAmount, Colors.red, small: true),
-                  _bRow('Insurance', _d(_insuranceCtrl), Colors.red, small: true),
-                  _bRow('Advance', _d(_advanceCtrl), Colors.red, small: true),
-                  _bRow('Fine', _d(_fineCtrl), Colors.red, small: true),
-                  const Divider(color: Colors.white12, height: 16),
-                  _bRow('Net Salary', _netSalary, Colors.green, bold: true),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Breakdown', style: AppTheme.heading(14)),
+            const SizedBox(height: 14),
+            _bRow('Gross Salary', _gross, AppTheme.textPrimary),
+            const Divider(color: AppTheme.divider),
+            _bRow('Total Allowances', _totalAllow, AppTheme.secondary, small: true),
+            const Divider(color: AppTheme.divider),
+            _bRow('Tax (${_taxPctCtrl.text}%)', _taxAmt, AppTheme.error, small: true),
+            _bRow('Other Deductions', _totalDed - _taxAmt, AppTheme.error, small: true),
+            _bRow('Total Deductions', _totalDed, AppTheme.error),
+            const Divider(color: AppTheme.divider),
+            _bRow('Net Salary', _net, AppTheme.secondary, bold: true),
+          ]),
+        )),
+      ]),
     );
   }
 
-  Widget _sectionTitle(String t) => Padding(
+  Widget _section(String t) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
-    child: Text(t,
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13,
-            decoration: TextDecoration.underline, decorationColor: Colors.white24)),
+    child: Text(t, style: AppTheme.heading(14)),
   );
 
   Widget _grid2(List<Widget> children) {
     final rows = <Widget>[];
     for (int i = 0; i < children.length; i += 2) {
-      rows.add(Row(
-        children: [
-          Expanded(child: children[i]),
-          const SizedBox(width: 10),
-          Expanded(child: i + 1 < children.length ? children[i + 1] : const SizedBox()),
-        ],
-      ));
+      rows.add(Row(children: [
+        Expanded(child: children[i]),
+        const SizedBox(width: 10),
+        Expanded(child: i + 1 < children.length ? children[i + 1] : const SizedBox()),
+      ]));
       rows.add(const SizedBox(height: 10));
     }
     return Column(children: rows);
   }
 
-  Widget _earnField(String label, TextEditingController ctrl, {String prefix = 'PKR'}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 11)),
-        const SizedBox(height: 4),
-        TextField(
-          controller: ctrl,
-          style: const TextStyle(color: Colors.white, fontSize: 13),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            prefixText: '$prefix  ',
-            prefixStyle: const TextStyle(color: Colors.white38, fontSize: 12),
-            filled: true,
-            fillColor: const Color(0xFF0F172A),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white12)),
-            enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white12)),
-            focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF3B82F6))),
-          ),
+  Widget _field(String label, TextEditingController ctrl, {String prefix = 'PKR'}) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label, style: AppTheme.label(11)),
+      const SizedBox(height: 4),
+      TextField(
+        controller: ctrl,
+        style: AppTheme.body(13),
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(
+          prefixText: '$prefix  ',
+          prefixStyle: AppTheme.label(12),
+          filled: true, fillColor: AppTheme.background,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.divider)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.divider)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.primary)),
         ),
-      ],
-    );
-  }
-
-  Widget _fullField(String label, TextEditingController ctrl) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 11)),
-        const SizedBox(height: 4),
-        TextField(
-          controller: ctrl,
-          style: const TextStyle(color: Colors.white, fontSize: 13),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            prefixText: 'PKR  ',
-            prefixStyle: const TextStyle(color: Colors.white38, fontSize: 12),
-            filled: true,
-            fillColor: const Color(0xFF0F172A),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white12)),
-            enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white12)),
-            focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF3B82F6))),
-          ),
-        ),
-        const SizedBox(height: 10),
-      ],
-    );
-  }
-
-  Widget _infoField(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 11)),
-        const SizedBox(height: 4),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white12),
-          ),
-          child: Text(value, style: const TextStyle(color: Colors.white54, fontSize: 13)),
-        ),
-      ],
-    );
-  }
-
-  Widget _bRow(String label, double value, Color color, {bool bold = false, bool small = false}) {
-    final formatted = value == 0
-        ? 'PKR 0.00'
-        : 'PKR ${value.toStringAsFixed(2)}';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label,
-              style: TextStyle(
-                  color: small ? Colors.white38 : Colors.white54,
-                  fontSize: small ? 10 : 11)),
-          Text(formatted,
-              style: TextStyle(
-                  color: color,
-                  fontSize: small ? 10 : 11,
-                  fontWeight: bold ? FontWeight.bold : FontWeight.normal)),
-        ],
       ),
-    );
-  }
+    ],
+  );
+
+  Widget _datePicker() => GestureDetector(
+    onTap: () async {
+      final p = await showDatePicker(
+        context: context, initialDate: _effectiveFrom,
+        firstDate: DateTime(2020), lastDate: DateTime(2030),
+        builder: (_, c) => Theme(
+          data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: AppTheme.primary)),
+          child: c!,
+        ),
+      );
+      if (p != null) setState(() => _effectiveFrom = p);
+    },
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Effective From', style: AppTheme.label(11)),
+      const SizedBox(height: 4),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+        decoration: BoxDecoration(
+          color: AppTheme.background, borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppTheme.divider),
+        ),
+        child: Row(children: [
+          const Icon(Icons.calendar_today, size: 14, color: AppTheme.textSecondary),
+          const SizedBox(width: 8),
+          Text('${_effectiveFrom.month.toString().padLeft(2, '0')}/${_effectiveFrom.day.toString().padLeft(2, '0')}/${_effectiveFrom.year}',
+              style: AppTheme.body(13)),
+        ]),
+      ),
+    ]),
+  );
+
+  Widget _bRow(String label, double value, Color color, {bool bold = false, bool small = false}) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(children: [
+      Expanded(child: Text(label, style: AppTheme.label(small ? 11 : 12))),
+      Text('PKR ${value.toStringAsFixed(0)}',
+          style: GoogleFonts.poppins(color: color, fontSize: small ? 11 : 12,
+              fontWeight: bold ? FontWeight.w700 : FontWeight.w600)),
+    ]),
+  );
 }
