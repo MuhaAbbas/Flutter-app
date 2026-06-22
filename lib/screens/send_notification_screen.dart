@@ -17,8 +17,8 @@ class _SendNotificationScreenState extends State<SendNotificationScreen> {
   final _messageCtrl = TextEditingController();
 
   String _type = 'notification';
-  String _audience = 'all';
-  String? _selectedUserId;
+  String _audience = 'employees';
+  String _employeeTarget = 'all'; // 'all' or a specific userId
   String? _selectedDeptId;
   DateTime? _deadline;
   bool _sending = false;
@@ -67,10 +67,18 @@ class _SendNotificationScreenState extends State<SendNotificationScreen> {
         'type': _type,
         'title': _titleCtrl.text.trim(),
         'message': _messageCtrl.text.trim(),
-        'audience': _audience,
       };
-      if (_audience == 'individual' && _selectedUserId != null) body['userId'] = _selectedUserId;
-      if (_audience == 'department' && _selectedDeptId != null) body['departmentId'] = _selectedDeptId;
+      if (_audience == 'employees') {
+        if (_employeeTarget == 'all') {
+          body['audience'] = 'all';
+        } else {
+          body['audience'] = 'individual';
+          body['userId'] = _employeeTarget;
+        }
+      } else {
+        body['audience'] = 'department';
+        if (_selectedDeptId != null) body['departmentId'] = _selectedDeptId;
+      }
       if (_type == 'task' && _deadline != null) body['deadline'] = _deadline!.toIso8601String();
       await ApiService().sendNotification(body);
       _titleCtrl.clear();
@@ -139,26 +147,26 @@ class _SendNotificationScreenState extends State<SendNotificationScreen> {
             Text('Audience', style: AppTheme.label(12, color: AppTheme.textSecondary)),
             const SizedBox(height: 10),
             Row(children: [
-              _audienceChip('all', 'All Employees'),
+              _audienceChip('employees', 'Employees'),
               const SizedBox(width: 8),
               _audienceChip('department', 'Department'),
-              const SizedBox(width: 8),
-              _audienceChip('individual', 'Individual'),
             ]),
-            if (_audience == 'individual') ...[
-              const SizedBox(height: 12),
+            const SizedBox(height: 12),
+            if (_audience == 'employees')
               _dropdown(
-                value: _selectedUserId,
-                hint: 'Select employee',
-                items: _employees.map((e) {
-                  final name = '${e['firstName'] ?? ''} ${e['lastName'] ?? ''}'.trim();
-                  return DropdownMenuItem(value: e['id']?.toString() ?? '', child: Text(name, overflow: TextOverflow.ellipsis));
-                }).toList(),
-                onChanged: (v) => setState(() => _selectedUserId = v),
+                value: _employeeTarget,
+                hint: 'Select target',
+                items: [
+                  const DropdownMenuItem(value: 'all', child: Text('All Employees')),
+                  ..._employees.map((e) {
+                    final name = '${e['firstName'] ?? ''} ${e['lastName'] ?? ''}'.trim();
+                    final id = e['id']?.toString() ?? '';
+                    return DropdownMenuItem(value: id, child: Text(name.isEmpty ? id : name, overflow: TextOverflow.ellipsis));
+                  }),
+                ],
+                onChanged: (v) => setState(() => _employeeTarget = v ?? 'all'),
               ),
-            ],
-            if (_audience == 'department') ...[
-              const SizedBox(height: 12),
+            if (_audience == 'department')
               _dropdown(
                 value: _selectedDeptId,
                 hint: 'Select department',
@@ -167,7 +175,6 @@ class _SendNotificationScreenState extends State<SendNotificationScreen> {
                     child: Text(d['name']?.toString() ?? '', overflow: TextOverflow.ellipsis))).toList(),
                 onChanged: (v) => setState(() => _selectedDeptId = v),
               ),
-            ],
           ]),
         ),
         const SizedBox(height: 12),
@@ -357,6 +364,7 @@ class _SendNotificationScreenState extends State<SendNotificationScreen> {
     required String hint,
     required List<DropdownMenuItem<String>> items,
     required void Function(String?) onChanged,
+    bool hasNull = false,
   }) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12),
     decoration: BoxDecoration(

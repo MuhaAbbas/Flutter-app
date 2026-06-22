@@ -5,21 +5,23 @@ import '../theme/app_theme.dart';
 class CustomTabBar extends StatelessWidget implements PreferredSizeWidget {
   final List<String> tabs;
   final TabController controller;
+  final bool? isScrollable;
 
-  const CustomTabBar({super.key, required this.tabs, required this.controller});
+  const CustomTabBar({super.key, required this.tabs, required this.controller, this.isScrollable});
 
   @override
   Size get preferredSize => const Size.fromHeight(44);
 
   @override
   Widget build(BuildContext context) {
+    final scrollable = isScrollable ?? tabs.length > 4;
     return Container(
       color: AppTheme.surface,
       height: 44,
       child: TabBar(
         controller: controller,
-        isScrollable: tabs.length > 4,
-        tabAlignment: tabs.length > 4 ? TabAlignment.start : TabAlignment.fill,
+        isScrollable: scrollable,
+        tabAlignment: scrollable ? TabAlignment.start : TabAlignment.fill,
         labelColor: AppTheme.primary,
         unselectedLabelColor: AppTheme.textSecondary,
         labelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),

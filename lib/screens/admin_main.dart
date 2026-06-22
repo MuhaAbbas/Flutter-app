@@ -21,6 +21,7 @@ class AdminMain extends StatefulWidget {
 class _AdminMainState extends State<AdminMain> {
   int _index = 0;
   bool _extended = false;
+  final _attendanceFilter = ValueNotifier<String>('all');
 
   static const _destinations = [
     (icon: Icons.dashboard_outlined, active: Icons.dashboard, label: 'Dashboard'),
@@ -32,6 +33,12 @@ class _AdminMainState extends State<AdminMain> {
     (icon: Icons.settings_outlined, active: Icons.settings, label: 'Salary Setup'),
     (icon: Icons.notifications_outlined, active: Icons.notifications, label: 'Notify'),
   ];
+
+  @override
+  void dispose() {
+    _attendanceFilter.dispose();
+    super.dispose();
+  }
 
   void _logout() async {
     await AuthService().logout();
@@ -54,15 +61,18 @@ class _AdminMainState extends State<AdminMain> {
           Expanded(
             child: IndexedStack(
               index: _index,
-              children: const [
-                AdminDashboard(),
-                EmployeesScreen(),
-                AttendanceScreen(),
-                MeetingsScreen(),
-                ActivityLogsScreen(),
-                PayrollScreen(),
-                SalarySetupScreen(),
-                SendNotificationScreen(),
+              children: [
+                AdminDashboard(onNavTap: (tabIndex, filter) {
+                  if (tabIndex == 2) _attendanceFilter.value = filter;
+                  setState(() => _index = tabIndex);
+                }),
+                const EmployeesScreen(),
+                AttendanceScreen(filterNotifier: _attendanceFilter),
+                const MeetingsScreen(),
+                const ActivityLogsScreen(),
+                const PayrollScreen(),
+                const SalarySetupScreen(),
+                const SendNotificationScreen(),
               ],
             ),
           ),
@@ -135,7 +145,11 @@ class _AdminMainState extends State<AdminMain> {
   Widget _railItem(int i) {
     final d = _destinations[i];
     final selected = _index == i;
-    return Padding(
+    return Tooltip(
+      message: _extended ? '' : d.label,
+      preferBelow: false,
+      waitDuration: const Duration(milliseconds: 400),
+      child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       child: GestureDetector(
         onTap: () => setState(() => _index = i),
@@ -168,6 +182,7 @@ class _AdminMainState extends State<AdminMain> {
           ),
         ),
       ),
+    ),
     );
   }
 

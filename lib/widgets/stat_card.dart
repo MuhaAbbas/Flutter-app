@@ -9,6 +9,7 @@ class StatCard extends StatelessWidget {
   final Color color;
   final String? subtitle;
   final VoidCallback? onTap;
+  final bool coloredBg;
 
   const StatCard({
     super.key,
@@ -18,6 +19,7 @@ class StatCard extends StatelessWidget {
     required this.color,
     this.subtitle,
     this.onTap,
+    this.coloredBg = false,
   });
 
   @override
@@ -27,7 +29,7 @@ class StatCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppTheme.surface,
+          color: coloredBg ? color.withOpacity(0.1) : AppTheme.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border(left: BorderSide(color: color, width: 3)),
           boxShadow: [

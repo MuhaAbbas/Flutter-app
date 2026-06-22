@@ -153,8 +153,15 @@ class _AllMeetingsTabState extends State<_AllMeetingsTab> {
     final endTime = _fmtTime(m['endTime'] ?? '');
     final location = m['location'] ?? m['venue'] ?? m['link'] ?? '';
     final participants = m['participants'] as List? ?? m['attendees'] as List? ?? [];
-    final empName = '${m['employee']?['firstName'] ?? m['user']?['firstName'] ?? m['firstName'] ?? ''} ${m['employee']?['lastName'] ?? m['user']?['lastName'] ?? m['lastName'] ?? ''}'.trim();
     final id = m['id']?.toString() ?? '';
+    final _u = m['employee'] ?? m['user'] ?? m['requestedBy'] ?? m['organizer'] ?? m['createdBy'] ?? {};
+    final empName = () {
+      final fn = (m['firstName'] ?? _u['firstName'] ?? '').toString();
+      final ln = (m['lastName'] ?? _u['lastName'] ?? '').toString();
+      if (fn.isNotEmpty || ln.isNotEmpty) return '$fn $ln'.trim();
+      return (_u['name'] ?? _u['fullName'] ?? m['name'] ?? m['employeeName'] ?? '').toString();
+    }();
+    final empId = (_u['employeeId'] ?? m['employeeId'] ?? '').toString();
 
     return GestureDetector(
       onTap: () => _showDetail(m),
@@ -170,13 +177,22 @@ class _AllMeetingsTabState extends State<_AllMeetingsTab> {
             Expanded(child: Text(title.toString(), style: AppTheme.body(14, color: AppTheme.textPrimary))),
             StatusBadge(status: status),
           ]),
-          if (empName.isNotEmpty)
+          if (empName.isNotEmpty || empId.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Row(children: [
                 const Icon(Icons.person_outline, size: 12, color: AppTheme.textSecondary),
                 const SizedBox(width: 4),
-                Text(empName, style: AppTheme.label(11)),
+                if (empName.isNotEmpty)
+                  Text(empName, style: AppTheme.label(11)),
+                if (empId.isNotEmpty) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
+                    child: Text(empId, style: AppTheme.label(9, color: AppTheme.primary, weight: FontWeight.w600)),
+                  ),
+                ],
               ]),
             ),
           const SizedBox(height: 10),

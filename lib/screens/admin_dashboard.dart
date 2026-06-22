@@ -11,7 +11,8 @@ import '../services/api_service.dart';
 import '../models/attendance_record.dart';
 
 class AdminDashboard extends StatefulWidget {
-  const AdminDashboard({super.key});
+  final void Function(int tabIndex, String filter)? onNavTap;
+  const AdminDashboard({super.key, this.onNavTap});
   @override
   State<AdminDashboard> createState() => _AdminDashboardState();
 }
@@ -121,33 +122,32 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Widget _statsGrid() {
     final items = [
-      (title: 'Total Employees', count: '${_stats.total}', icon: Icons.people, color: AppTheme.primary),
-      (title: 'Present Today', count: '${_stats.present}', icon: Icons.check_circle_outline, color: const Color(0xFF4ADE80)),
-      (title: 'Absent Today', count: '${_stats.absent}', icon: Icons.cancel_outlined, color: const Color(0xFFF87171)),
-      (title: 'On Leave', count: '${_stats.onLeave}', icon: Icons.beach_access_outlined, color: const Color(0xFFFBBF24)),
-      (title: 'Late Today', count: '${_stats.late}', icon: Icons.schedule_outlined, color: const Color(0xFF60A5FA)),
+      (title: 'Total Employees', count: '${_stats.total}', icon: Icons.people, color: AppTheme.primary, tab: 1, filter: 'all'),
+      (title: 'Present Today', count: '${_stats.present}', icon: Icons.check_circle_outline, color: const Color(0xFF4ADE80), tab: 2, filter: 'present'),
+      (title: 'Absent Today', count: '${_stats.absent}', icon: Icons.cancel_outlined, color: const Color(0xFFF87171), tab: 2, filter: 'absent'),
+      (title: 'On Leave', count: '${_stats.onLeave}', icon: Icons.beach_access_outlined, color: const Color(0xFFFBBF24), tab: 2, filter: 'leave'),
+      (title: 'Late Today', count: '${_stats.late}', icon: Icons.schedule_outlined, color: const Color(0xFF60A5FA), tab: 2, filter: 'late'),
     ];
 
-    return LayoutBuilder(builder: (_, constraints) {
-      final crossCount = constraints.maxWidth > 900 ? 3 : constraints.maxWidth > 600 ? 2 : 1;
-      return GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: crossCount,
-          crossAxisSpacing: 14,
-          mainAxisSpacing: 14,
-          childAspectRatio: 2.6,
-        ),
-        itemCount: items.length,
-        itemBuilder: (_, i) => StatCard(
-          title: items[i].title,
-          count: items[i].count,
-          icon: items[i].icon,
-          color: items[i].color,
-        ),
-      );
-    });
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 14,
+        mainAxisSpacing: 14,
+        childAspectRatio: 2.2,
+      ),
+      itemCount: items.length,
+      itemBuilder: (_, i) => StatCard(
+        title: items[i].title,
+        count: items[i].count,
+        icon: items[i].icon,
+        color: items[i].color,
+        coloredBg: true,
+        onTap: widget.onNavTap != null ? () => widget.onNavTap!(items[i].tab, items[i].filter) : null,
+      ),
+    );
   }
 
   Widget _chartSection() {

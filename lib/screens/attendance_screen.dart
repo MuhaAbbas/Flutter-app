@@ -12,7 +12,8 @@ import '../services/api_service.dart';
 import '../config/api_config.dart';
 
 class AttendanceScreen extends StatefulWidget {
-  const AttendanceScreen({super.key});
+  final ValueNotifier<String>? filterNotifier;
+  const AttendanceScreen({super.key, this.filterNotifier});
   @override
   State<AttendanceScreen> createState() => _AttendanceScreenState();
 }
@@ -39,15 +40,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         bottom: CustomTabBar(
           tabs: const ['Records', 'Corrections', 'Leave Requests', 'Import / Export'],
           controller: _tab,
+          isScrollable: true,
         ),
       ),
       body: TabBarView(
         controller: _tab,
-        children: const [
-          _RecordsTab(),
-          _CorrectionsTab(),
-          _LeaveTab(),
-          _ImportExportTab(),
+        children: [
+          _RecordsTab(filterNotifier: widget.filterNotifier),
+          const _CorrectionsTab(),
+          const _LeaveTab(),
+          const _ImportExportTab(),
         ],
       ),
     );
@@ -57,7 +59,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 // ── Records Tab ───────────────────────────────────────────────────────────────
 
 class _RecordsTab extends StatefulWidget {
-  const _RecordsTab();
+  final ValueNotifier<String>? filterNotifier;
+  const _RecordsTab({this.filterNotifier});
   @override
   State<_RecordsTab> createState() => _RecordsTabState();
 }
@@ -68,9 +71,29 @@ class _RecordsTabState extends State<_RecordsTab> {
   bool _loading = true;
   String? _error;
   DateTime _date = DateTime.now();
+  String _statusFilter = 'all';
+
+  List<Map<String, dynamic>> get _visible => _statusFilter == 'all'
+      ? _records
+      : _records.where((r) => (r['status'] ?? '').toString().toLowerCase() == _statusFilter).toList();
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    widget.filterNotifier?.addListener(_onExternalFilter);
+    _load();
+  }
+
+  void _onExternalFilter() {
+    final v = widget.filterNotifier?.value ?? 'all';
+    if (mounted) setState(() => _statusFilter = v);
+  }
+
+  @override
+  void dispose() {
+    widget.filterNotifier?.removeListener(_onExternalFilter);
+    super.dispose();
+  }
 
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
@@ -160,37 +183,50 @@ class _RecordsTabState extends State<_RecordsTab> {
       color: AppTheme.surface,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: Row(children: [
-        _statChip('Present', present, const Color(0xFF4ADE80)),
+        _statChip('Present', present, const Color(0xFF4ADE80), 'present'),
         const SizedBox(width: 10),
-        _statChip('Absent', absent, const Color(0xFFF87171)),
+        _statChip('Absent', absent, const Color(0xFFF87171), 'absent'),
         const SizedBox(width: 10),
-        _statChip('Late', late, const Color(0xFF60A5FA)),
+        _statChip('Late', late, const Color(0xFF60A5FA), 'late'),
         const SizedBox(width: 10),
-        _statChip('Leave', leave, const Color(0xFFFBBF24)),
+        _statChip('Leave', leave, const Color(0xFFFBBF24), 'leave'),
       ]),
     );
   }
 
-  Widget _statChip(String label, int count, Color color) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-    decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
-    child: Column(children: [
-      Text('$count', style: GoogleFonts.poppins(color: color, fontSize: 16, fontWeight: FontWeight.w700)),
-      Text(label, style: AppTheme.label(10, color: color)),
-    ]),
-  );
+  Widget _statChip(String label, int count, Color color, String filterKey) {
+    final active = _statusFilter == filterKey;
+    return GestureDetector(
+      onTap: () => setState(() => _statusFilter = active ? 'all' : filterKey),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? color.withOpacity(0.22) : color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(8),
+          border: active ? Border.all(color: color, width: 1.5) : null,
+        ),
+        child: Column(children: [
+          Text('$count', style: GoogleFonts.poppins(color: color, fontSize: 16, fontWeight: FontWeight.w700)),
+          Text(label, style: AppTheme.label(10, color: color)),
+        ]),
+      ),
+    );
+  }
 
   Widget _body() {
     if (_loading) return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
     if (_error != null) return _errWidget(_error!, _load);
     if (_records.isEmpty) return _emptyWidget('No attendance records for this date');
+    final shown = _visible;
+    if (shown.isEmpty) return _emptyWidget('No ${_statusFilter == "all" ? "" : "$_statusFilter "}records for this date');
     return RefreshIndicator(
       onRefresh: _load,
       color: AppTheme.primary,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: _records.length,
-        itemBuilder: (_, i) => _recordCard(_records[i]),
+        itemCount: shown.length,
+        itemBuilder: (_, i) => _recordCard(shown[i]),
       ),
     );
   }
@@ -639,21 +675,25 @@ class _ImportExportTab extends StatelessWidget {
     required IconData icon, required Color color, required String endpoint,
   }) {
     return SectionCard(
-      child: Row(children: [
-        Container(
-          width: 44, height: 44,
-          decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-          child: Icon(icon, color: color, size: 22),
-        ),
-        const SizedBox(width: 14),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: AppTheme.body(14)),
-          Text(subtitle, style: AppTheme.label(11)),
-        ])),
-        const SizedBox(width: 12),
-        _fmtBtn(ctx, endpoint, 'PDF', Icons.picture_as_pdf, AppTheme.error),
-        const SizedBox(width: 8),
-        _fmtBtn(ctx, endpoint, 'Excel', Icons.table_chart_outlined, AppTheme.secondary),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: AppTheme.body(14)),
+            Text(subtitle, style: AppTheme.label(11)),
+          ])),
+        ]),
+        const SizedBox(height: 12),
+        Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+          _fmtBtn(ctx, endpoint, 'PDF', Icons.picture_as_pdf, AppTheme.error),
+          const SizedBox(width: 8),
+          _fmtBtn(ctx, endpoint, 'Excel', Icons.table_chart_outlined, AppTheme.secondary),
+        ]),
       ]),
     );
   }

@@ -35,7 +35,13 @@ class _SalarySetupScreenState extends State<SalarySetupScreen> {
       final data = await ApiService().getSalarySetupsWithError(search: _search.isNotEmpty ? _search : null);
       if (mounted) setState(() { _setups = data; _loading = false; });
     } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+      final msg = e.toString();
+      if (mounted) setState(() {
+        _error = msg.contains('404')
+            ? 'Salary setup records not found (404). Please ensure the endpoint is configured on the server.'
+            : msg.replaceFirst('Exception: ', '').replaceFirst('DioException [bad response]: ', '');
+        _loading = false;
+      });
     }
   }
 
