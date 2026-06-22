@@ -228,6 +228,51 @@ class ApiService {
     }
   }
 
+  // ── EMPLOYEE CRUD ────────────────────────────────────────────────────────────
+
+  Future<void> updateEmployee(String id, Map<String, dynamic> data) async {
+    try {
+      await _dio.patch('/users/$id', data: data);
+    } on DioException catch (e) {
+      throw Exception(e.response?.data?['message'] ?? 'Failed to update employee');
+    }
+  }
+
+  Future<void> deleteEmployee(String id) async {
+    try {
+      await _dio.delete('/users/$id');
+    } on DioException catch (e) {
+      throw Exception(e.response?.data?['message'] ?? 'Failed to delete employee');
+    }
+  }
+
+  Future<void> setEmployeeActive(String id, bool active) async {
+    try {
+      await _dio.patch('/users/$id', data: {'isActive': active});
+    } on DioException catch (e) {
+      throw Exception(e.response?.data?['message'] ?? 'Failed to update status');
+    }
+  }
+
+  Future<void> resetEmployeePassword(String id) async {
+    try {
+      await _dio.post('/users/$id/reset-password');
+    } on DioException catch (e) {
+      // Try alternate endpoint
+      if (e.response?.statusCode == 404) {
+        try {
+          final emp = await _dio.get('/users/$id');
+          final email = emp.data?['data']?['email'] ?? emp.data?['email'];
+          if (email != null) {
+            await _dio.post('/auth/forgot-password', data: {'email': email});
+            return;
+          }
+        } catch (_) {}
+      }
+      throw Exception(e.response?.data?['message'] ?? 'Failed to reset password');
+    }
+  }
+
   // ── ATTENDANCE ALL (Admin) ───────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> getAttendanceAll({String? from, String? to, String? status}) async {

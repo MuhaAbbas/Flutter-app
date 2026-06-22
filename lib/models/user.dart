@@ -30,17 +30,26 @@ class User {
   bool get isAdminOrHod => isAdmin || isHod;
 
   factory User.fromJson(Map<String, dynamic> json) {
+    final roleRaw = json['role'];
+    final role = roleRaw is Map
+        ? (roleRaw['name'] ?? 'employee').toString()
+        : (roleRaw ?? 'employee').toString();
     return User(
-      id: json['id'] ?? '',
+      id: json['id'] ?? json['_id'] ?? '',
       email: json['email'] ?? '',
-      firstName: json['firstName'] ?? '',
-      lastName: json['lastName'] ?? '',
+      firstName: json['firstName'] ?? json['first_name'] ?? '',
+      lastName: json['lastName'] ?? json['last_name'] ?? '',
       department: json['department'],
       designation: json['designation'],
       vehicleType: json['vehicleType'],
-      role: json['role'] ?? 'employee',
+      role: role,
       permissions: List<String>.from(json['permissions'] ?? []),
       avatar: json['avatar'],
     );
   }
+
+  Map<String, String> toMap() => {
+    'id': id, 'email': email, 'firstName': firstName,
+    'lastName': lastName, 'role': role,
+  };
 }

@@ -130,9 +130,21 @@ class _EmployeesTabState extends State<_EmployeesTab> {
             childAspectRatio: cols == 1 ? 3.5 : 1.9,
           ),
           itemCount: _filtered.length,
-          itemBuilder: (_, i) => _card(_filtered[i]),
+          itemBuilder: (_, i) => GestureDetector(
+            onTap: () => _showEditSheet(_filtered[i]),
+            child: _card(_filtered[i]),
+          ),
         );
       }),
+    );
+  }
+
+  void _showEditSheet(Map<String, dynamic> e) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EditEmployeeSheet(employee: e, onSaved: _load),
     );
   }
 
@@ -343,6 +355,460 @@ class _RolesTabState extends State<_RolesTab> {
       },
     );
   }
+}
+
+// ── Edit Employee Sheet ───────────────────────────────────────────────────────
+
+class _EditEmployeeSheet extends StatefulWidget {
+  final Map<String, dynamic> employee;
+  final VoidCallback onSaved;
+  const _EditEmployeeSheet({required this.employee, required this.onSaved});
+  @override
+  State<_EditEmployeeSheet> createState() => _EditEmployeeSheetState();
+}
+
+class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
+  late final TextEditingController _firstName;
+  late final TextEditingController _lastName;
+  late final TextEditingController _contact;
+
+  bool _isTeamHead = false;
+  bool _isActive = true;
+  String? _selectedDeptId;
+  String? _selectedRoleName;
+  bool _saving = false;
+  bool _deleting = false;
+  bool _showReset = false;
+  List<Map<String, dynamic>> _depts = [];
+  List<Map<String, dynamic>> _roles = [];
+  bool _loadingMeta = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.employee;
+    _firstName = TextEditingController(text: (e['firstName'] ?? e['first_name'] ?? '').toString());
+    _lastName  = TextEditingController(text: (e['lastName']  ?? e['last_name']  ?? '').toString());
+    _contact   = TextEditingController(text: (e['contactNumber'] ?? e['phone'] ?? e['contact'] ?? '').toString());
+    _isTeamHead = e['isTeamHead'] == true || e['isTeamHead'] == 1;
+    _isActive   = e['isActive'] == true || e['isActive'] == 1 ||
+        e['status']?.toString().toLowerCase() == 'active';
+    final deptObj = e['department'] is Map ? e['department'] as Map : null;
+    _selectedDeptId = (deptObj?['id'] ?? deptObj?['_id'] ?? e['departmentId'])?.toString();
+    final roleObj = e['role'] is Map ? e['role'] as Map : null;
+    _selectedRoleName = (roleObj?['name'] ?? (e['role'] is String ? e['role'] : null))?.toString();
+    _loadMeta();
+  }
+
+  @override
+  void dispose() {
+    _firstName.dispose(); _lastName.dispose(); _contact.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadMeta() async {
+    try {
+      final r = await Future.wait([ApiService().getDepartments(), ApiService().getRoles()]);
+      if (mounted) setState(() {
+        _depts = r[0] as List<Map<String, dynamic>>;
+        _roles = r[1] as List<Map<String, dynamic>>;
+        _loadingMeta = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingMeta = false);
+    }
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      final id = (widget.employee['id'] ?? widget.employee['_id'] ?? '').toString();
+      final body = <String, dynamic>{
+        'firstName': _firstName.text.trim(),
+        'lastName': _lastName.text.trim(),
+        'isTeamHead': _isTeamHead,
+      };
+      if (_contact.text.trim().isNotEmpty) body['contactNumber'] = _contact.text.trim();
+      if (_selectedDeptId != null) body['departmentId'] = _selectedDeptId;
+      if (_selectedRoleName != null) body['role'] = _selectedRoleName;
+      await ApiService().updateEmployee(id, body);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Employee updated'), backgroundColor: Color(0xFF4ADE80)));
+        widget.onSaved();
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: AppTheme.error));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _toggleActive() async {
+    final newActive = !_isActive;
+    try {
+      await ApiService().setEmployeeActive(
+          (widget.employee['id'] ?? widget.employee['_id'] ?? '').toString(), newActive);
+      if (mounted) setState(() => _isActive = newActive);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(newActive ? 'Account activated' : 'Account deactivated'),
+          backgroundColor: newActive ? const Color(0xFF4ADE80) : AppTheme.error));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: AppTheme.error));
+    }
+  }
+
+  Future<void> _resetPassword() async {
+    try {
+      await ApiService().resetEmployeePassword(
+          (widget.employee['id'] ?? widget.employee['_id'] ?? '').toString());
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Password reset email sent'), backgroundColor: Color(0xFF4ADE80)));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: AppTheme.error));
+    }
+  }
+
+  Future<void> _delete() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: Text('Delete Employee', style: AppTheme.heading(16)),
+        content: Text('This is irreversible. The account will be permanently removed.',
+            style: AppTheme.body(13)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false),
+              child: Text('Cancel', style: AppTheme.label(13))),
+          TextButton(onPressed: () => Navigator.pop(context, true),
+              child: Text('Delete', style: AppTheme.label(13, color: AppTheme.error))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _deleting = true);
+    try {
+      await ApiService().deleteEmployee(
+          (widget.employee['id'] ?? widget.employee['_id'] ?? '').toString());
+      if (mounted) { widget.onSaved(); Navigator.pop(context); }
+    } catch (e) {
+      if (mounted) setState(() => _deleting = false);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: AppTheme.error));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final e = widget.employee;
+    String name = '${e['firstName'] ?? e['first_name'] ?? ''} ${e['lastName'] ?? e['last_name'] ?? ''}'.trim();
+    if (name.isEmpty) name = (e['name'] ?? '').toString();
+    final email = (e['email'] ?? '').toString();
+    final isVerified = e['isVerified'] == true || e['emailVerified'] == true || e['isEmailVerified'] == true;
+    final cs = [AppTheme.primary, AppTheme.secondary, const Color(0xFFC084FC), const Color(0xFFFBBF24)];
+    final ac = cs[name.isNotEmpty ? name.codeUnitAt(0) % cs.length : 0];
+
+    return Container(
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.92),
+      decoration: const BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(children: [
+        Container(margin: const EdgeInsets.only(top: 12), width: 40, height: 4,
+            decoration: BoxDecoration(color: AppTheme.divider, borderRadius: BorderRadius.circular(2))),
+        Expanded(child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 32),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+            // Header
+            Row(children: [
+              Text('Edit Employee', style: AppTheme.heading(17)),
+              const Spacer(),
+              IconButton(onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, color: AppTheme.textSecondary, size: 20)),
+            ]),
+            const SizedBox(height: 16),
+
+            // Avatar
+            Center(child: CircleAvatar(
+              radius: 30, backgroundColor: ac.withOpacity(0.15),
+              child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
+                  style: AppTheme.label(22, color: ac, weight: FontWeight.w700)),
+            )),
+            const SizedBox(height: 20),
+
+            // Name row
+            Row(children: [
+              Expanded(child: _field('First Name', _firstName)),
+              const SizedBox(width: 12),
+              Expanded(child: _field('Last Name', _lastName)),
+            ]),
+            const SizedBox(height: 14),
+
+            // Email (readonly)
+            _lbl('Email Address'),
+            const SizedBox(height: 6),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              decoration: BoxDecoration(
+                color: AppTheme.background, borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.divider),
+              ),
+              child: Row(children: [
+                Expanded(child: Text(email, style: AppTheme.body(13, color: AppTheme.textSecondary))),
+                if (isVerified)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4ADE80).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text('Verified', style: AppTheme.label(10, color: const Color(0xFF4ADE80))),
+                  ),
+              ]),
+            ),
+            const SizedBox(height: 14),
+
+            // Department
+            _lbl('Department'),
+            const SizedBox(height: 6),
+            _loadingMeta
+                ? const SizedBox(height: 42, child: LinearProgressIndicator(color: AppTheme.primary))
+                : _dropdown(
+                    value: _depts.any((d) => (d['id'] ?? d['_id'])?.toString() == _selectedDeptId)
+                        ? _selectedDeptId : null,
+                    hint: 'Select department',
+                    items: _depts.map((d) {
+                      final id = (d['id'] ?? d['_id'] ?? '').toString();
+                      return DropdownMenuItem(value: id, child: Text((d['name'] ?? '').toString(), overflow: TextOverflow.ellipsis));
+                    }).toList(),
+                    onChanged: (v) => setState(() => _selectedDeptId = v),
+                  ),
+            const SizedBox(height: 14),
+
+            // Role
+            _lbl('Role'),
+            const SizedBox(height: 6),
+            _loadingMeta
+                ? const SizedBox(height: 42, child: LinearProgressIndicator(color: AppTheme.primary))
+                : _dropdown(
+                    value: _roles.any((r) => (r['name'] ?? '').toString() == _selectedRoleName)
+                        ? _selectedRoleName : null,
+                    hint: 'Select role',
+                    items: _roles.map((r) {
+                      final n = (r['name'] ?? '').toString();
+                      return DropdownMenuItem(value: n, child: Text(n, overflow: TextOverflow.ellipsis));
+                    }).toList(),
+                    onChanged: (v) => setState(() => _selectedRoleName = v),
+                  ),
+            const SizedBox(height: 14),
+
+            // Contact
+            _field('Contact Number', _contact, type: TextInputType.phone),
+            const SizedBox(height: 14),
+
+            // Team Head toggle
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.background, borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.divider),
+              ),
+              child: Row(children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Team Head', style: AppTheme.body(13)),
+                  Text('Can assign visits to any employee', style: AppTheme.label(11)),
+                ])),
+                Switch(value: _isTeamHead, onChanged: (v) => setState(() => _isTeamHead = v),
+                    activeColor: AppTheme.primary),
+              ]),
+            ),
+            const SizedBox(height: 20),
+
+            // Save / Cancel
+            Row(children: [
+              Expanded(child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  side: const BorderSide(color: AppTheme.divider),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: Text('Cancel', style: AppTheme.label(14)),
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: ElevatedButton(
+                onPressed: _saving ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: _saving
+                    ? const SizedBox(width: 18, height: 18,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : Text('Save Changes',
+                        style: AppTheme.label(14, color: Colors.white, weight: FontWeight.w600)),
+              )),
+            ]),
+            const SizedBox(height: 24),
+
+            // Account actions header
+            Text('ACCOUNT ACTIONS', style: AppTheme.label(11, color: AppTheme.textSecondary)),
+            const SizedBox(height: 10),
+
+            // Reset Password accordion
+            Container(
+              decoration: BoxDecoration(
+                color: AppTheme.background, borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.divider),
+              ),
+              child: Column(children: [
+                InkWell(
+                  onTap: () => setState(() => _showReset = !_showReset),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(children: [
+                      const Icon(Icons.lock_outline, color: AppTheme.textSecondary, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text('Reset Password', style: AppTheme.body(13))),
+                      Icon(_showReset ? Icons.expand_less : Icons.expand_more,
+                          color: AppTheme.textSecondary, size: 18),
+                    ]),
+                  ),
+                ),
+                if (_showReset)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                    child: SizedBox(width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _resetPassword,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.surfaceElevated,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: Text('Send Reset Link', style: AppTheme.label(13, color: AppTheme.primary)),
+                      ),
+                    ),
+                  ),
+              ]),
+            ),
+            const SizedBox(height: 10),
+
+            // Deactivate / Activate
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.background, borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.divider),
+              ),
+              child: Row(children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(_isActive ? 'Deactivate Account' : 'Activate Account', style: AppTheme.body(13)),
+                  Text(_isActive ? 'Prevent this employee from logging in'
+                      : 'Allow this employee to log in', style: AppTheme.label(11)),
+                ])),
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  onPressed: _toggleActive,
+                  icon: Icon(_isActive ? Icons.block : Icons.check_circle_outline,
+                      size: 14, color: Colors.white),
+                  label: Text(_isActive ? 'Deactivate' : 'Activate',
+                      style: AppTheme.label(12, color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _isActive ? const Color(0xFF64748B) : const Color(0xFF4ADE80),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 10),
+
+            // Delete Permanently
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.error.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.error.withOpacity(0.2)),
+              ),
+              child: Row(children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Delete Permanently', style: AppTheme.body(13, color: AppTheme.error)),
+                  Text('Irreversible — removes the account entirely', style: AppTheme.label(11)),
+                ])),
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  onPressed: _deleting ? null : _delete,
+                  icon: _deleting
+                      ? const SizedBox(width: 12, height: 12,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.delete_outline, size: 14, color: Colors.white),
+                  label: Text('Delete', style: AppTheme.label(12, color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.error,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ]),
+            ),
+          ]),
+        )),
+      ]),
+    );
+  }
+
+  Widget _field(String label, TextEditingController ctrl, {TextInputType? type}) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _lbl(label), const SizedBox(height: 6),
+        TextField(
+          controller: ctrl, style: AppTheme.body(13), keyboardType: type,
+          decoration: InputDecoration(
+            filled: true, fillColor: AppTheme.background,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.divider)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.divider)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.primary)),
+          ),
+        ),
+      ]);
+
+  Widget _lbl(String t) => Text(t, style: AppTheme.label(12, color: AppTheme.textSecondary));
+
+  Widget _dropdown({
+    required String? value,
+    required String hint,
+    required List<DropdownMenuItem<String>> items,
+    required void Function(String?) onChanged,
+  }) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12),
+    decoration: BoxDecoration(
+      color: AppTheme.background, borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: AppTheme.divider),
+    ),
+    child: DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: value, hint: Text(hint, style: AppTheme.label(13)),
+        isExpanded: true, dropdownColor: AppTheme.surfaceElevated,
+        style: AppTheme.body(13), iconEnabledColor: AppTheme.textSecondary,
+        items: items, onChanged: onChanged,
+      ),
+    ),
+  );
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────────

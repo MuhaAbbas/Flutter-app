@@ -31,6 +31,12 @@ class AuthService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('access_token', _accessToken!);
       await prefs.setString('refresh_token', data['refreshToken'] ?? '');
+      // Persist user fields so we can restore without hitting the API on next launch
+      await prefs.setString('u_id', _currentUser!.id);
+      await prefs.setString('u_email', _currentUser!.email);
+      await prefs.setString('u_firstName', _currentUser!.firstName);
+      await prefs.setString('u_lastName', _currentUser!.lastName);
+      await prefs.setString('u_role', _currentUser!.role);
 
       return true;
     } on DioException catch (e) {
@@ -44,6 +50,22 @@ class AuthService {
     if (token == null) return false;
 
     _accessToken = token;
+
+    // Restore user from prefs so routing works immediately without API round-trip
+    final savedId = prefs.getString('u_id');
+    final savedRole = prefs.getString('u_role');
+    if (savedId != null && savedRole != null) {
+      _currentUser = User(
+        id: savedId,
+        email: prefs.getString('u_email') ?? '',
+        firstName: prefs.getString('u_firstName') ?? '',
+        lastName: prefs.getString('u_lastName') ?? '',
+        role: savedRole,
+        permissions: [],
+      );
+    }
+
+    // Try to refresh user from the server (non-blocking on failure)
     try {
       final dio = Dio(BaseOptions(
         baseUrl: ApiConfig.baseUrl,
@@ -52,23 +74,26 @@ class AuthService {
         receiveTimeout: const Duration(seconds: 10),
       ));
       final response = await dio.get(ApiConfig.me);
-      final data = response.data?['data'] ?? response.data;
-      if (data is Map<String, dynamic>) {
-        _currentUser = User.fromJson(data);
+      final raw = response.data?['data'] ?? response.data;
+      if (raw is Map<String, dynamic>) {
+        _currentUser = User.fromJson(raw);
+        // Keep saved role in sync
+        await prefs.setString('u_role', _currentUser!.role);
+        await prefs.setString('u_firstName', _currentUser!.firstName);
+        await prefs.setString('u_lastName', _currentUser!.lastName);
       }
-      return true;
     } on DioException catch (e) {
       final status = e.response?.statusCode;
-      // Only clear token on explicit auth rejection; network/timeout keeps session alive
       if (status == 401 || status == 403) {
         await logout();
         return false;
       }
-      return true;
+      // Network/timeout — use restored user from prefs
     } catch (_) {
-      // Parse error or other — keep token, proceed as logged in
-      return true;
+      // Parse error — use restored user from prefs
     }
+
+    return _currentUser != null;
   }
 
   Future<void> logout() async {
@@ -77,5 +102,10 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
     await prefs.remove('refresh_token');
+    await prefs.remove('u_id');
+    await prefs.remove('u_email');
+    await prefs.remove('u_firstName');
+    await prefs.remove('u_lastName');
+    await prefs.remove('u_role');
   }
 }
