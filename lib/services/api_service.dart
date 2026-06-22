@@ -382,39 +382,6 @@ class ApiService {
     }
   }
 
-  // ── EMPLOYEE MANAGEMENT ──────────────────────────────────────────────────────
-
-  Future<void> updateEmployee(String id, Map<String, dynamic> data) async {
-    try {
-      await _dio.patch('/users/$id', data: data);
-    } on DioException catch (e) {
-      throw Exception(e.response?.data?['message'] ?? 'Failed to update employee');
-    }
-  }
-
-  Future<void> deactivateEmployee(String id) async {
-    try {
-      await _dio.patch('/users/$id/deactivate');
-    } on DioException catch (e) {
-      throw Exception(e.response?.data?['message'] ?? 'Failed to deactivate');
-    }
-  }
-
-  Future<void> resetEmployeePassword(String id, String newPassword) async {
-    try {
-      await _dio.patch('/users/$id/reset-password', data: {'newPassword': newPassword});
-    } on DioException catch (e) {
-      throw Exception(e.response?.data?['message'] ?? 'Failed to reset password');
-    }
-  }
-
-  Future<void> deleteEmployee(String id) async {
-    try {
-      await _dio.delete('/users/$id');
-    } on DioException catch (e) {
-      throw Exception(e.response?.data?['message'] ?? 'Failed to delete employee');
-    }
-  }
 
   Future<List<Map<String, dynamic>>> getEmployeeTravelHistory(String userId) async {
     try {
