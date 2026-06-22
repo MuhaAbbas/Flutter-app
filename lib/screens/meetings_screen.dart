@@ -296,7 +296,7 @@ class _LiveTrackingTabState extends State<_LiveTrackingTab> {
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final all = await ApiService().getMeetings();
+      final all = await ApiService().getMeetingsAll();
       if (mounted) setState(() {
         _active = all.where((m) =>
           (m['status'] ?? '').toString().toLowerCase() == 'ongoing').toList();
