@@ -24,6 +24,12 @@ class _AdminMainState extends State<AdminMain> {
   bool _showMore = false;
   final _attendanceFilter = ValueNotifier<String>('all');
 
+  // Tracks which screen indexes have been visited so they get built lazily
+  final Set<int> _seen = {0};
+
+  // Cached screen widgets — created once, reused across rebuilds
+  late final List<Widget> _screens;
+
   static const _primaryDest = [
     (icon: Icons.dashboard_outlined, active: Icons.dashboard, label: 'Dashboard'),
     (icon: Icons.people_outline, active: Icons.people, label: 'Employees'),
@@ -37,6 +43,26 @@ class _AdminMainState extends State<AdminMain> {
     (icon: Icons.settings_outlined, active: Icons.settings, label: 'Salary Setup'),
     (icon: Icons.notifications_outlined, active: Icons.notifications, label: 'Notify'),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      AdminDashboard(onNavTap: (tabIndex, filter) {
+        if (tabIndex == 2) _attendanceFilter.value = filter;
+        _go(tabIndex);
+      }),
+      const EmployeesScreen(),
+      AttendanceScreen(filterNotifier: _attendanceFilter),
+      const MeetingsScreen(),
+      const ActivityLogsScreen(),
+      const PayrollScreen(),
+      const SalarySetupScreen(),
+      const SendNotificationScreen(),
+    ];
+  }
+
+  void _go(int i) => setState(() { _index = i; _seen.add(i); });
 
   @override
   void dispose() {
@@ -65,19 +91,9 @@ class _AdminMainState extends State<AdminMain> {
           Expanded(
             child: IndexedStack(
               index: _index,
-              children: [
-                AdminDashboard(onNavTap: (tabIndex, filter) {
-                  if (tabIndex == 2) _attendanceFilter.value = filter;
-                  setState(() => _index = tabIndex);
-                }),
-                const EmployeesScreen(),
-                AttendanceScreen(filterNotifier: _attendanceFilter),
-                const MeetingsScreen(),
-                const ActivityLogsScreen(),
-                const PayrollScreen(),
-                const SalarySetupScreen(),
-                const SendNotificationScreen(),
-              ],
+              // Only build a screen when it has been visited; placeholder keeps state alive
+              children: List.generate(_screens.length,
+                  (i) => _seen.contains(i) ? _screens[i] : const SizedBox.shrink()),
             ),
           ),
         ],
@@ -188,7 +204,7 @@ class _AdminMainState extends State<AdminMain> {
       child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       child: GestureDetector(
-        onTap: () => setState(() => _index = i),
+        onTap: () => _go(i),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           padding: EdgeInsets.symmetric(horizontal: _extended ? 12 : 8, vertical: 10),
