@@ -4,7 +4,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/status_badge.dart';
-import '../widgets/stat_card.dart';
 import '../widgets/section_card.dart';
 import '../widgets/custom_app_bar.dart';
 import '../services/api_service.dart';
@@ -129,28 +128,58 @@ class _AdminDashboardState extends State<AdminDashboard> {
       (title: 'Late Today', count: '${_stats.late}', icon: Icons.schedule_outlined, color: const Color(0xFF60A5FA), tab: 2, filter: 'late'),
     ];
 
-    return LayoutBuilder(builder: (_, c) {
-      final cols = c.maxWidth > 340 ? 2 : 1;
-      return GridView.builder(
+    return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: cols,
-        crossAxisSpacing: 14,
-        mainAxisSpacing: 14,
-        childAspectRatio: cols == 2 ? 2.4 : 4.2,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.35,
       ),
       itemCount: items.length,
-      itemBuilder: (_, i) => StatCard(
-        title: items[i].title,
-        count: items[i].count,
-        icon: items[i].icon,
-        color: items[i].color,
-        coloredBg: true,
-        onTap: widget.onNavTap != null ? () => widget.onNavTap!(items[i].tab, items[i].filter) : null,
-      ),
+      itemBuilder: (_, i) {
+        final item = items[i];
+        return GestureDetector(
+          onTap: widget.onNavTap != null ? () => widget.onNavTap!(item.tab, item.filter) : null,
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: item.color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
+              border: Border(left: BorderSide(color: item.color, width: 3)),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 2))],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 34, height: 34,
+                  decoration: BoxDecoration(
+                    color: item.color.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(item.icon, color: item.color, size: 18),
+                ),
+                const Spacer(),
+                Text(item.count, style: GoogleFonts.poppins(
+                  color: AppTheme.textPrimary,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                )),
+                const SizedBox(height: 3),
+                Text(item.title, style: GoogleFonts.inter(
+                  color: AppTheme.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ), maxLines: 2, overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+        );
+      },
     );
-    });
   }
 
   Widget _chartSection() {
