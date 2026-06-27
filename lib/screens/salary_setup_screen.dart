@@ -50,7 +50,7 @@ class _SalarySetupScreenState extends State<SalarySetupScreen> {
       appBar: CustomAppBar(
         title: 'Salary Setup',
         actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppTheme.textSecondary)),
+          IconButton(onPressed: _load, icon: Icon(Icons.refresh, color: AppTheme.textSecondary)),
         ],
       ),
       body: Column(children: [
@@ -63,7 +63,7 @@ class _SalarySetupScreenState extends State<SalarySetupScreen> {
             decoration: InputDecoration(
               hintText: 'Search employees...',
               hintStyle: AppTheme.label(13),
-              prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondary, size: 18),
+              prefixIcon: Icon(Icons.search, color: AppTheme.textSecondary, size: 18),
               filled: true,
               fillColor: AppTheme.surface,
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -98,7 +98,7 @@ class _SalarySetupScreenState extends State<SalarySetupScreen> {
         color: AppTheme.background,
         child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: _tableHeader()),
       ),
-      const Divider(color: AppTheme.divider, height: 1),
+      Divider(color: AppTheme.divider, height: 1),
       Expanded(child: RefreshIndicator(
         onRefresh: _load, color: AppTheme.primary,
         child: SingleChildScrollView(
@@ -150,7 +150,7 @@ class _SalarySetupScreenState extends State<SalarySetupScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
       decoration: BoxDecoration(
         color: alt ? AppTheme.background.withOpacity(0.5) : AppTheme.surface,
-        border: const Border(bottom: BorderSide(color: AppTheme.divider, width: 0.5)),
+        border: Border(bottom: BorderSide(color: AppTheme.divider, width: 0.5)),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
         SizedBox(width: 230, child: Row(children: [
@@ -393,13 +393,13 @@ class _SalarySetupEditScreenState extends State<SalarySetupEditScreen> {
             Text('Breakdown', style: AppTheme.heading(14)),
             const SizedBox(height: 14),
             _bRow('Gross Salary', _gross, AppTheme.textPrimary),
-            const Divider(color: AppTheme.divider),
+            Divider(color: AppTheme.divider),
             _bRow('Total Allowances', _totalAllow, AppTheme.secondary, small: true),
-            const Divider(color: AppTheme.divider),
+            Divider(color: AppTheme.divider),
             _bRow('Tax (${_taxPctCtrl.text}%)', _taxAmt, AppTheme.error, small: true),
             _bRow('Other Deductions', _totalDed - _taxAmt, AppTheme.error, small: true),
             _bRow('Total Deductions', _totalDed, AppTheme.error),
-            const Divider(color: AppTheme.divider),
+            Divider(color: AppTheme.divider),
             _bRow('Net Salary', _net, AppTheme.secondary, bold: true),
           ]),
         )),
@@ -439,8 +439,8 @@ class _SalarySetupEditScreenState extends State<SalarySetupEditScreen> {
           prefixStyle: AppTheme.label(12),
           filled: true, fillColor: AppTheme.background,
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.divider)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.divider)),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppTheme.divider)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppTheme.divider)),
           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.primary)),
         ),
       ),
@@ -469,7 +469,7 @@ class _SalarySetupEditScreenState extends State<SalarySetupEditScreen> {
           border: Border.all(color: AppTheme.divider),
         ),
         child: Row(children: [
-          const Icon(Icons.calendar_today, size: 14, color: AppTheme.textSecondary),
+          Icon(Icons.calendar_today, size: 14, color: AppTheme.textSecondary),
           const SizedBox(width: 8),
           Text('${_effectiveFrom.month.toString().padLeft(2, '0')}/${_effectiveFrom.day.toString().padLeft(2, '0')}/${_effectiveFrom.year}',
               style: AppTheme.body(13)),

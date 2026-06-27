@@ -163,7 +163,7 @@ class _EmployeesTabState extends State<_EmployeesTab> with AutomaticKeepAliveCli
         decoration: InputDecoration(
           hintText: 'Search by name, email or ID...',
           hintStyle: AppTheme.label(13),
-          prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondary, size: 18),
+          prefixIcon: Icon(Icons.search, color: AppTheme.textSecondary, size: 18),
           filled: true, fillColor: AppTheme.background,
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.divider)),
@@ -488,6 +488,19 @@ class _DepartmentsTabState extends State<_DepartmentsTab> with AutomaticKeepAliv
     }
   }
 
+  void _openEdit(Map<String, dynamic> dept) {
+    final id = (dept['id'] ?? dept['_id'] ?? '').toString();
+    final row = _rowData[id] ?? {};
+    showDialog(
+      context: context,
+      builder: (_) => _EditDepartmentDialog(
+        dept: dept,
+        row: row,
+        onSaved: _load,
+      ),
+    );
+  }
+
   void _newDept() {
     final ctrl = TextEditingController();
     showDialog(context: context, builder: (_) => AlertDialog(
@@ -571,7 +584,7 @@ class _DepartmentsTabState extends State<_DepartmentsTab> with AutomaticKeepAliv
       _th(100, 'Grace (Min)', center: true),
       _th(90,  'Selfie',   center: true),
       _th(100, 'Overtime', center: true),
-      _th(230, 'Action',   center: true),
+      _th(310, 'Action',   center: true),
     ]),
   );
 
@@ -599,7 +612,9 @@ class _DepartmentsTabState extends State<_DepartmentsTab> with AutomaticKeepAliv
         )))),
         SizedBox(width: 90,  child: Center(child: Switch(value: row['selfie']   as bool, onChanged: (v) => setState(() => _rowData[id] = {...row, 'selfie':   v}), activeColor: AppTheme.primary, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap))),
         SizedBox(width: 100, child: Center(child: Switch(value: row['overtime'] as bool, onChanged: (v) => setState(() => _rowData[id] = {...row, 'overtime': v}), activeColor: AppTheme.primary, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap))),
-        SizedBox(width: 230, child: Row(children: [
+        SizedBox(width: 310, child: Row(children: [
+          _deptBtn('Edit', Icons.edit_outlined, const Color(0xFF64748B), () => _openEdit(dept)),
+          const SizedBox(width: 6),
           _deptBtn('Save', Icons.save_outlined, AppTheme.primary, isSaving ? null : () => _save(dept), loading: isSaving),
           const SizedBox(width: 6),
           _deptBtn('Delete', Icons.delete_outline, AppTheme.error, () => _delete(dept)),
@@ -622,7 +637,7 @@ class _DepartmentsTabState extends State<_DepartmentsTab> with AutomaticKeepAliv
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Text(_fmtTime(value), style: AppTheme.body(12)),
           const SizedBox(width: 6),
-          const Icon(Icons.access_time, size: 13, color: AppTheme.textSecondary),
+          Icon(Icons.access_time, size: 13, color: AppTheme.textSecondary),
         ]),
       ),
     );
@@ -636,6 +651,195 @@ class _DepartmentsTabState extends State<_DepartmentsTab> with AutomaticKeepAliv
       label: Text(label, style: AppTheme.label(12, color: Colors.white)),
       style: ElevatedButton.styleFrom(backgroundColor: color, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
     );
+}
+
+// ── Edit Department Dialog ────────────────────────────────────────────────────
+
+class _EditDepartmentDialog extends StatefulWidget {
+  final Map<String, dynamic> dept;
+  final Map<String, dynamic> row;
+  final VoidCallback onSaved;
+  const _EditDepartmentDialog({required this.dept, required this.row, required this.onSaved});
+  @override State<_EditDepartmentDialog> createState() => _EditDepartmentDialogState();
+}
+
+class _EditDepartmentDialogState extends State<_EditDepartmentDialog> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _descCtrl;
+  late final TextEditingController _graceCtrl;
+  late final TextEditingController _absencesCtrl;
+  late TimeOfDay _startTime;
+  late TimeOfDay _endTime;
+  late bool _selfie;
+  late bool _overtime;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.dept;
+    final r = widget.row;
+    _nameCtrl    = TextEditingController(text: (d['name'] ?? '').toString());
+    _descCtrl    = TextEditingController(text: (d['description'] ?? '').toString());
+    _graceCtrl   = TextEditingController(text: ((r['grace'] ?? d['gracePeriod'] ?? 15)).toString());
+    _absencesCtrl = TextEditingController(text: ((d['allowedAbsences'] ?? d['allowedAbsencesPerMonth'] ?? 2)).toString());
+    _startTime   = r['startTime'] is TimeOfDay ? r['startTime'] as TimeOfDay : const TimeOfDay(hour: 10, minute: 0);
+    _endTime     = r['endTime'] is TimeOfDay ? r['endTime'] as TimeOfDay : const TimeOfDay(hour: 18, minute: 0);
+    _selfie      = (r['selfie'] ?? d['requiresSelfie'] ?? false) == true;
+    _overtime    = (r['overtime'] ?? d['allowOvertime'] ?? false) == true;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose(); _descCtrl.dispose(); _graceCtrl.dispose(); _absencesCtrl.dispose();
+    super.dispose();
+  }
+
+  String _toApiTime(TimeOfDay t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  String _fmtTime(TimeOfDay t) {
+    final h = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
+    final m = t.minute.toString().padLeft(2, '0');
+    return '$h:$m ${t.period == DayPeriod.am ? "AM" : "PM"}';
+  }
+
+  Future<void> _save() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      final id = (widget.dept['id'] ?? widget.dept['_id'] ?? '').toString();
+      await ApiService().updateDepartment(id, {
+        'name': name,
+        if (_descCtrl.text.trim().isNotEmpty) 'description': _descCtrl.text.trim(),
+        'shiftStart': _toApiTime(_startTime),
+        'shiftEnd': _toApiTime(_endTime),
+        'gracePeriod': int.tryParse(_graceCtrl.text) ?? 15,
+        'allowedAbsences': int.tryParse(_absencesCtrl.text) ?? 2,
+        'requiresSelfie': _selfie,
+        'allowOvertime': _overtime,
+      });
+      if (mounted) {
+        Navigator.pop(context);
+        widget.onSaved();
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: AppTheme.error));
+    } finally { if (mounted) setState(() => _saving = false); }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppTheme.surface,
+      title: Text('Edit Department', style: AppTheme.heading(16)),
+      insetPadding: const EdgeInsets.all(24),
+      contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      content: SizedBox(
+        width: 500,
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _lbl('Name'),
+            const SizedBox(height: 6),
+            _field(_nameCtrl, 'Department name'),
+            const SizedBox(height: 14),
+            _lbl('Description'),
+            const SizedBox(height: 6),
+            _field(_descCtrl, 'Optional description', maxLines: 2),
+            const SizedBox(height: 14),
+            Row(children: [
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _lbl('Start Time'),
+                const SizedBox(height: 6),
+                _timePicker(_startTime, (t) => setState(() => _startTime = t)),
+              ])),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _lbl('End Time'),
+                const SizedBox(height: 6),
+                _timePicker(_endTime, (t) => setState(() => _endTime = t)),
+              ])),
+            ]),
+            const SizedBox(height: 14),
+            Row(children: [
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _lbl('Grace Period (min)'),
+                const SizedBox(height: 6),
+                _numField(_graceCtrl),
+              ])),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _lbl('Allowed Absences/Month'),
+                const SizedBox(height: 6),
+                _numField(_absencesCtrl),
+              ])),
+            ]),
+            const SizedBox(height: 14),
+            _toggle('Require Selfie', _selfie, (v) => setState(() => _selfie = v)),
+            const SizedBox(height: 8),
+            _toggle('Allow Overtime', _overtime, (v) => setState(() => _overtime = v)),
+            const SizedBox(height: 8),
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: AppTheme.label(13))),
+        ElevatedButton(
+          onPressed: _saving ? null : _save,
+          style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+          child: _saving
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : Text('Save', style: AppTheme.label(13, color: Colors.white, weight: FontWeight.w600)),
+        ),
+      ],
+    );
+  }
+
+  Widget _lbl(String t) => Text(t, style: AppTheme.label(11, color: AppTheme.textSecondary));
+
+  Widget _field(TextEditingController ctrl, String hint, {int maxLines = 1}) => TextField(
+    controller: ctrl, style: AppTheme.body(13), maxLines: maxLines,
+    decoration: InputDecoration(
+      hintText: hint, hintStyle: AppTheme.label(13),
+      filled: true, fillColor: AppTheme.background,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.divider)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.divider)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppTheme.primary)),
+    ),
+  );
+
+  Widget _numField(TextEditingController ctrl) => TextField(
+    controller: ctrl, style: AppTheme.body(13), keyboardType: TextInputType.number, textAlign: TextAlign.center,
+    decoration: InputDecoration(
+      filled: true, fillColor: AppTheme.background,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.divider)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.divider)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppTheme.primary)),
+    ),
+  );
+
+  Widget _timePicker(TimeOfDay value, void Function(TimeOfDay) onChanged) => GestureDetector(
+    onTap: () async {
+      final t = await showTimePicker(context: context, initialTime: value,
+        builder: (_, c) => Theme(data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: AppTheme.primary)), child: c!));
+      if (t != null) onChanged(t);
+    },
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(color: AppTheme.background, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppTheme.divider)),
+      child: Row(children: [
+        Expanded(child: Text(_fmtTime(value), style: AppTheme.body(13))),
+        Icon(Icons.access_time, size: 14, color: AppTheme.textSecondary),
+      ]),
+    ),
+  );
+
+  Widget _toggle(String label, bool value, void Function(bool) onChanged) => Row(children: [
+    Expanded(child: Text(label, style: AppTheme.body(13))),
+    Switch(value: value, onChanged: onChanged, activeColor: AppTheme.primary, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+  ]);
 }
 
 // ── Edit Employee Sheet ───────────────────────────────────────────────────────
@@ -772,7 +976,7 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
             Row(children: [
               Text('Edit Employee', style: AppTheme.heading(17)),
               const Spacer(),
-              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close, color: AppTheme.textSecondary, size: 20)),
+              IconButton(onPressed: () => Navigator.pop(context), icon: Icon(Icons.close, color: AppTheme.textSecondary, size: 20)),
             ]),
             const SizedBox(height: 16),
             Center(child: CircleAvatar(radius: 30, backgroundColor: ac.withOpacity(0.15),
@@ -856,7 +1060,7 @@ class _EditEmployeeSheetState extends State<_EditEmployeeSheet> {
                   onTap: () => setState(() => _showReset = !_showReset),
                   borderRadius: BorderRadius.circular(10),
                   child: Padding(padding: const EdgeInsets.all(14), child: Row(children: [
-                    const Icon(Icons.lock_outline, color: AppTheme.textSecondary, size: 18),
+                    Icon(Icons.lock_outline, color: AppTheme.textSecondary, size: 18),
                     const SizedBox(width: 10),
                     Expanded(child: Text('Change Password', style: AppTheme.body(13))),
                     Icon(_showReset ? Icons.expand_less : Icons.expand_more, color: AppTheme.textSecondary, size: 18),

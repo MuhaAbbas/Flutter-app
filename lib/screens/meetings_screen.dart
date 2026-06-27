@@ -154,7 +154,7 @@ class _AllMeetingsTabState extends State<_AllMeetingsTab> {
         onChanged: (v) => setState(() => _statusFilter = v ?? 'all'),
       )),
       const SizedBox(width: 10),
-      IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppTheme.textSecondary, size: 20), padding: const EdgeInsets.all(6), constraints: const BoxConstraints()),
+      IconButton(onPressed: _load, icon: Icon(Icons.refresh, color: AppTheme.textSecondary, size: 20), padding: const EdgeInsets.all(6), constraints: const BoxConstraints()),
     ]),
   );
 
@@ -194,7 +194,7 @@ class _AllMeetingsTabState extends State<_AllMeetingsTab> {
         color: AppTheme.background,
         child: SingleChildScrollView(controller: _hHeader, scrollDirection: Axis.horizontal, child: _tableHeader()),
       ),
-      const Divider(color: AppTheme.divider, height: 1),
+      Divider(color: AppTheme.divider, height: 1),
       Expanded(child: RefreshIndicator(
         onRefresh: _load, color: AppTheme.primary,
         child: SingleChildScrollView(
@@ -238,7 +238,7 @@ class _AllMeetingsTabState extends State<_AllMeetingsTab> {
     return Container(
       width: 1250,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surfaceElevated,
         border: Border(bottom: BorderSide(color: AppTheme.divider, width: 0.5)),
       ),
@@ -281,7 +281,7 @@ class _AllMeetingsTabState extends State<_AllMeetingsTab> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: alt ? AppTheme.background.withOpacity(0.5) : AppTheme.surface,
-        border: const Border(bottom: BorderSide(color: AppTheme.divider, width: 0.5)),
+        border: Border(bottom: BorderSide(color: AppTheme.divider, width: 0.5)),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
         SizedBox(width: 130, child: Text(dateStr, style: AppTheme.label(12))),
@@ -410,7 +410,7 @@ class _LiveTrackingTabState extends State<_LiveTrackingTab> {
       Text('${_active.length} Meeting${_active.length == 1 ? '' : 's'} Live',
           style: AppTheme.body(14, color: AppTheme.textPrimary)),
       const Spacer(),
-      IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppTheme.textSecondary, size: 20)),
+      IconButton(onPressed: _load, icon: Icon(Icons.refresh, color: AppTheme.textSecondary, size: 20)),
     ]),
   );
 
@@ -454,14 +454,14 @@ class _LiveTrackingTabState extends State<_LiveTrackingTab> {
         const SizedBox(height: 10),
         if (startTime.isNotEmpty)
           Row(children: [
-            const Icon(Icons.access_time, size: 12, color: AppTheme.textSecondary),
+            Icon(Icons.access_time, size: 12, color: AppTheme.textSecondary),
             const SizedBox(width: 4),
             Text('Started $startTime', style: AppTheme.label(11)),
           ]),
         if (location.toString().isNotEmpty) ...[
           const SizedBox(height: 4),
           Row(children: [
-            const Icon(Icons.place_outlined, size: 12, color: AppTheme.textSecondary),
+            Icon(Icons.place_outlined, size: 12, color: AppTheme.textSecondary),
             const SizedBox(width: 4),
             Text(location.toString(), style: AppTheme.label(11)),
           ]),

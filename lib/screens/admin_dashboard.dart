@@ -19,6 +19,7 @@ class AdminDashboard extends StatefulWidget {
 class _AdminDashboardState extends State<AdminDashboard> {
   TodayStats _stats = TodayStats.empty();
   List<Map<String, dynamic>> _recent = [];
+  Map<String, Map<String, dynamic>> _empById = {};
   bool _loading = true;
   String? _error;
 
@@ -36,6 +37,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       final results = await Future.wait([
         ApiService().getTodayStats(),
         ApiService().getAttendanceAll(),
+        ApiService().getEmployees(),
       ]);
       if (mounted) setState(() {
         _stats = results[0] as TodayStats;
@@ -43,6 +45,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
         final list = raw['records'] ?? raw['data'] ?? raw['attendance'] ?? [];
         final all = list is List ? list.cast<Map<String, dynamic>>() : <Map<String, dynamic>>[];
         _recent = all.take(8).toList();
+        final employees = results[2] as List<Map<String, dynamic>>;
+        _empById = { for (final e in employees) (e['id'] ?? e['_id'] ?? '').toString(): e };
         _loading = false;
       });
     } catch (e) {
@@ -59,7 +63,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         actions: [
           IconButton(
             onPressed: _load,
-            icon: const Icon(Icons.refresh, color: AppTheme.textSecondary),
+            icon: Icon(Icons.refresh, color: AppTheme.textSecondary),
           ),
         ],
       ),
@@ -121,65 +125,50 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Widget _statsGrid() {
     final items = [
-      (title: 'Total Employees', count: '${_stats.total}', icon: Icons.people, color: AppTheme.primary, tab: 1, filter: 'all'),
-      (title: 'Present Today', count: '${_stats.present}', icon: Icons.check_circle_outline, color: const Color(0xFF4ADE80), tab: 2, filter: 'present'),
-      (title: 'Absent Today', count: '${_stats.absent}', icon: Icons.cancel_outlined, color: const Color(0xFFF87171), tab: 2, filter: 'absent'),
-      (title: 'On Leave', count: '${_stats.onLeave}', icon: Icons.beach_access_outlined, color: const Color(0xFFFBBF24), tab: 2, filter: 'leave'),
-      (title: 'Late Today', count: '${_stats.late}', icon: Icons.schedule_outlined, color: const Color(0xFF60A5FA), tab: 2, filter: 'late'),
+      (title: 'Total Employees', count: '${_stats.total}',  icon: Icons.people,                color: AppTheme.primary,            tab: 1, filter: 'all'),
+      (title: 'Present Today',   count: '${_stats.present}', icon: Icons.check_circle_outline,  color: const Color(0xFF4ADE80), tab: 2, filter: 'present'),
+      (title: 'Absent Today',    count: '${_stats.absent}',  icon: Icons.cancel_outlined,        color: const Color(0xFFF87171), tab: 2, filter: 'absent'),
+      (title: 'On Leave',        count: '${_stats.onLeave}', icon: Icons.beach_access_outlined,  color: const Color(0xFFFBBF24), tab: 2, filter: 'leave'),
+      (title: 'Late Today',      count: '${_stats.late}',    icon: Icons.schedule_outlined,      color: const Color(0xFF60A5FA), tab: 2, filter: 'late'),
     ];
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.35,
-      ),
-      itemCount: items.length,
-      itemBuilder: (_, i) {
-        final item = items[i];
-        return GestureDetector(
-          onTap: widget.onNavTap != null ? () => widget.onNavTap!(item.tab, item.filter) : null,
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: item.color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16),
-              border: Border(left: BorderSide(color: item.color, width: 3)),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 2))],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 34, height: 34,
-                  decoration: BoxDecoration(
-                    color: item.color.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(item.icon, color: item.color, size: 18),
-                ),
-                const Spacer(),
-                Text(item.count, style: GoogleFonts.poppins(
-                  color: AppTheme.textPrimary,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w700,
-                  height: 1,
-                )),
-                const SizedBox(height: 3),
-                Text(item.title, style: GoogleFonts.inter(
-                  color: AppTheme.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                ), maxLines: 2, overflow: TextOverflow.ellipsis),
-              ],
-            ),
+    Widget card(int i) {
+      final item = items[i];
+      return GestureDetector(
+        onTap: widget.onNavTap != null ? () => widget.onNavTap!(item.tab, item.filter) : null,
+        child: Container(
+          height: 86,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: item.color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: item.color.withOpacity(0.3)),
           ),
-        );
-      },
-    );
+          child: Row(children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(color: item.color.withOpacity(0.18), borderRadius: BorderRadius.circular(10)),
+              child: Icon(item.icon, color: item.color, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+              FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+                child: Text(item.count, style: GoogleFonts.poppins(color: AppTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w700, height: 1.1)),
+              ),
+              Text(item.title, style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis),
+            ])),
+          ]),
+        ),
+      );
+    }
+
+    return Column(children: [
+      Row(children: [Expanded(child: card(0)), const SizedBox(width: 12), Expanded(child: card(1))]),
+      const SizedBox(height: 12),
+      Row(children: [Expanded(child: card(2)), const SizedBox(width: 12), Expanded(child: card(3))]),
+      const SizedBox(height: 12),
+      card(4),
+    ]);
   }
 
   Widget _chartSection() {
@@ -292,7 +281,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ],
             ),
           ),
-          const Divider(height: 1, color: AppTheme.divider),
+          Divider(height: 1, color: AppTheme.divider),
           if (_recent.isEmpty)
             Padding(
               padding: const EdgeInsets.all(32),
@@ -301,7 +290,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
           else
             ...List.generate(_recent.length, (i) {
               final r = _recent[i];
-              final name = '${r['firstName'] ?? r['user']?['firstName'] ?? ''} ${r['lastName'] ?? r['user']?['lastName'] ?? ''}'.trim();
+              final userId = (r['userId'] ?? (r['user'] is String ? r['user'] : (r['user'] is Map ? (r['user']?['id'] ?? r['user']?['_id']) : null)) ?? '').toString();
+              final emp = _empById[userId] ?? {};
+              final name = '${r['firstName'] ?? (r['user'] is Map ? r['user']?['firstName'] : null) ?? emp['firstName'] ?? ''} ${r['lastName'] ?? (r['user'] is Map ? r['user']?['lastName'] : null) ?? emp['lastName'] ?? ''}'.trim();
               final status = r['status'] ?? 'present';
               final checkIn = r['checkIn'] ?? r['checkInTime'] ?? '';
               return Column(
@@ -334,7 +325,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ),
                   ),
                   if (i < _recent.length - 1)
-                    const Divider(height: 1, indent: 56, color: AppTheme.divider),
+                    Divider(height: 1, indent: 56, color: AppTheme.divider),
                 ],
               );
             }),

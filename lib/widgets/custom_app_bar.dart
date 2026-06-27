@@ -34,7 +34,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                 if (showBack)
                   IconButton(
                     onPressed: () => Navigator.maybePop(context),
-                    icon: const Icon(Icons.arrow_back_ios_new, color: AppTheme.textSecondary, size: 18),
+                    icon: Icon(Icons.arrow_back_ios_new, color: AppTheme.textSecondary, size: 18),
                   )
                 else
                   const SizedBox(width: 20),
@@ -51,7 +51,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
             ),
           ),
           if (bottom != null) bottom!,
-          const Divider(height: 1, color: AppTheme.divider),
+          Divider(height: 1, color: AppTheme.divider),
         ],
       ),
     );

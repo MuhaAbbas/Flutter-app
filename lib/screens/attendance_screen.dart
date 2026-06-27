@@ -233,7 +233,7 @@ class _RecordsTabState extends State<_RecordsTab> {
         ),
         child: Text('Clear Filters', style: AppTheme.label(12)),
       ),
-      IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppTheme.textSecondary, size: 20), padding: const EdgeInsets.all(8), constraints: const BoxConstraints()),
+      IconButton(onPressed: _load, icon: Icon(Icons.refresh, color: AppTheme.textSecondary, size: 20), padding: const EdgeInsets.all(8), constraints: const BoxConstraints()),
     ]),
   );
 
@@ -256,7 +256,7 @@ class _RecordsTabState extends State<_RecordsTab> {
             Text(DateFormat('MMM d, yyyy').format(value), style: AppTheme.label(12, color: AppTheme.textPrimary, weight: FontWeight.w600)),
           ]),
           const SizedBox(width: 8),
-          const Icon(Icons.calendar_today, size: 13, color: AppTheme.textSecondary),
+          Icon(Icons.calendar_today, size: 13, color: AppTheme.textSecondary),
         ]),
       ),
     );
@@ -335,7 +335,7 @@ class _RecordsTabState extends State<_RecordsTab> {
           child: _tableHeader(),
         ),
       ),
-      const Divider(color: AppTheme.divider, height: 1),
+      Divider(color: AppTheme.divider, height: 1),
       Expanded(child: RefreshIndicator(
         onRefresh: _load, color: AppTheme.primary,
         child: SingleChildScrollView(
@@ -378,7 +378,7 @@ class _RecordsTabState extends State<_RecordsTab> {
     return Container(
       width: 960,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surfaceElevated,
         border: Border(bottom: BorderSide(color: AppTheme.divider, width: 0.5)),
       ),
@@ -408,7 +408,7 @@ class _RecordsTabState extends State<_RecordsTab> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: alt ? AppTheme.background.withOpacity(0.5) : AppTheme.surface,
-        border: const Border(bottom: BorderSide(color: AppTheme.divider, width: 0.5)),
+        border: Border(bottom: BorderSide(color: AppTheme.divider, width: 0.5)),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
         SizedBox(width: 220, child: Row(children: [
@@ -678,7 +678,7 @@ class _LeaveTabState extends State<_LeaveTab> {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Row(children: [
-              const Icon(Icons.calendar_today, size: 12, color: AppTheme.textSecondary),
+              Icon(Icons.calendar_today, size: 12, color: AppTheme.textSecondary),
               const SizedBox(width: 6),
               Text('$from → $to', style: AppTheme.label(12)),
             ]),
@@ -773,7 +773,7 @@ class _ImportExportTab extends StatelessWidget {
               ])),
             ]),
             const SizedBox(height: 16),
-            const Divider(color: AppTheme.divider, height: 1),
+            Divider(color: AppTheme.divider, height: 1),
             const SizedBox(height: 14),
             Text('Required CSV Format:', style: AppTheme.label(12, color: AppTheme.primary, weight: FontWeight.w600)),
             const SizedBox(height: 8),

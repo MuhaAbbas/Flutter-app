@@ -94,7 +94,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
       appBar: CustomAppBar(
         title: 'Activity Logs',
         actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppTheme.textSecondary)),
+          IconButton(onPressed: _load, icon: Icon(Icons.refresh, color: AppTheme.textSecondary)),
         ],
       ),
       body: Column(children: [
@@ -137,7 +137,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
       Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         IconButton(
           onPressed: () { setState(() { if (_month == 1) { _month = 12; _year--; } else _month--; }); _load(); },
-          icon: const Icon(Icons.chevron_left, color: AppTheme.textSecondary),
+          icon: Icon(Icons.chevron_left, color: AppTheme.textSecondary),
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -147,7 +147,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
         ),
         IconButton(
           onPressed: () { setState(() { if (_month == 12) { _month = 1; _year++; } else _month++; }); _load(); },
-          icon: const Icon(Icons.chevron_right, color: AppTheme.textSecondary),
+          icon: Icon(Icons.chevron_right, color: AppTheme.textSecondary),
         ),
       ]),
     ]),
@@ -187,7 +187,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
         color: AppTheme.background,
         child: SingleChildScrollView(controller: _hHeader, scrollDirection: Axis.horizontal, child: _tableHeader()),
       ),
-      const Divider(color: AppTheme.divider, height: 1),
+      Divider(color: AppTheme.divider, height: 1),
       Expanded(child: RefreshIndicator(
         onRefresh: _load, color: AppTheme.primary,
         child: SingleChildScrollView(
@@ -225,7 +225,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
     return Container(
       width: 1000,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surfaceElevated,
         border: Border(bottom: BorderSide(color: AppTheme.divider, width: 0.5)),
       ),
@@ -254,7 +254,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: alt ? AppTheme.background.withOpacity(0.5) : AppTheme.surface,
-        border: const Border(bottom: BorderSide(color: AppTheme.divider, width: 0.5)),
+        border: Border(bottom: BorderSide(color: AppTheme.divider, width: 0.5)),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
         SizedBox(width: 130, child: Text(timeStr, style: AppTheme.label(12))),

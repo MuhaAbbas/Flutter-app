@@ -204,7 +204,7 @@ class _SendNotificationScreenState extends State<SendNotificationScreen> {
                     border: Border.all(color: AppTheme.divider),
                   ),
                   child: Row(children: [
-                    const Icon(Icons.calendar_today, size: 14, color: AppTheme.textSecondary),
+                    Icon(Icons.calendar_today, size: 14, color: AppTheme.textSecondary),
                     const SizedBox(width: 8),
                     Text(_deadline != null ? DateFormat('MMM d, yyyy').format(_deadline!) : 'Select deadline',
                         style: AppTheme.body(13, color: _deadline != null ? AppTheme.textPrimary : AppTheme.textSecondary)),
@@ -251,12 +251,12 @@ class _SendNotificationScreenState extends State<SendNotificationScreen> {
         color: AppTheme.surface,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(children: [
-          const Icon(Icons.history, color: AppTheme.textSecondary, size: 16),
+          Icon(Icons.history, color: AppTheme.textSecondary, size: 16),
           const SizedBox(width: 8),
           Text('${_history.length} sent notifications', style: AppTheme.label(12)),
         ]),
       ),
-      const Divider(height: 1, color: AppTheme.divider),
+      Divider(height: 1, color: AppTheme.divider),
       Expanded(child: _history.isEmpty
           ? Center(child: Text('No notifications sent yet', style: AppTheme.label(13)))
           : ListView.builder(
@@ -399,8 +399,8 @@ class _SendNotificationScreenState extends State<SendNotificationScreen> {
           hintStyle: AppTheme.label(13),
           filled: true, fillColor: AppTheme.background,
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.divider)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.divider)),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppTheme.divider)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppTheme.divider)),
           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppTheme.primary)),
         ),
       ),

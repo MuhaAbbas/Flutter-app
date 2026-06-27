@@ -88,7 +88,7 @@ class _AdminMainState extends State<AdminMain> {
       body: Row(
         children: [
           _buildRail(),
-          const VerticalDivider(width: 1, thickness: 1, color: AppTheme.divider),
+          VerticalDivider(width: 1, thickness: 1, color: AppTheme.divider),
           Expanded(
             child: IndexedStack(
               index: _index,
@@ -125,7 +125,7 @@ class _AdminMainState extends State<AdminMain> {
               ],
             ),
           ),
-          const Divider(color: AppTheme.divider, height: 1),
+          Divider(color: AppTheme.divider, height: 1),
           _themeToggleItem(),
           _logoutItem(),
           const SizedBox(height: 12),

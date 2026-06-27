@@ -55,7 +55,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
       appBar: CustomAppBar(
         title: 'Payroll',
         actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppTheme.textSecondary)),
+          IconButton(onPressed: _load, icon: Icon(Icons.refresh, color: AppTheme.textSecondary)),
         ],
       ),
       body: Column(children: [
@@ -72,7 +72,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
     child: Row(children: [
       IconButton(
         onPressed: () { setState(() { if (_month == 1) { _month = 12; _year--; } else _month--; }); _load(); },
-        icon: const Icon(Icons.chevron_left, color: AppTheme.textSecondary),
+        icon: Icon(Icons.chevron_left, color: AppTheme.textSecondary),
         padding: EdgeInsets.zero, constraints: const BoxConstraints(),
       ),
       const SizedBox(width: 8),
@@ -88,7 +88,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
       const SizedBox(width: 8),
       IconButton(
         onPressed: () { setState(() { if (_month == 12) { _month = 1; _year++; } else _month++; }); _load(); },
-        icon: const Icon(Icons.chevron_right, color: AppTheme.textSecondary),
+        icon: Icon(Icons.chevron_right, color: AppTheme.textSecondary),
         padding: EdgeInsets.zero, constraints: const BoxConstraints(),
       ),
       const Spacer(),
@@ -261,7 +261,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
             const SizedBox(height: 4),
             Text('${_months[_month - 1]} $_year', style: AppTheme.label(12)),
             const SizedBox(height: 16),
-            const Divider(color: AppTheme.divider),
+            Divider(color: AppTheme.divider),
             ...items.map((item) => Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(children: [
