@@ -83,15 +83,11 @@ class _MyCalendarTabState extends State<_MyCalendarTab> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final results = await Future.wait([
-      ApiService().getMyMonthlyStats(month: _month.month, year: _month.year),
-      ApiService().getMyAttendanceHistory(month: _month.month, year: _month.year),
-    ]);
+    final historyData = await ApiService().getMyAttendanceHistory(month: _month.month, year: _month.year);
     setState(() {
-      _stats = results[0] as Map<String, dynamic>;
-      final historyData = results[1] as Map<String, dynamic>;
       _records = historyData['records'] as List<Map<String, dynamic>>;
       _publicHolidayDates = (historyData['publicHolidayDates'] as List).cast<String>();
+      _stats = historyData['summary'] as Map<String, dynamic>;
       _loading = false;
     });
   }

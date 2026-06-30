@@ -711,12 +711,14 @@ class ApiService {
       final data = response.data['data'];
       final List recordList = data is List ? data : (data?['records'] ?? data?['items'] ?? []);
       final List holidayList = data is Map ? (data['publicHolidayDates'] ?? []) : [];
+      final Map<String, dynamic> summary = data is Map ? (data['summary'] ?? {}) as Map<String, dynamic> : {};
       return {
         'records': recordList.cast<Map<String, dynamic>>(),
         'publicHolidayDates': holidayList.cast<String>(),
+        'summary': summary,
       };
     } catch (_) {
-      return {'records': <Map<String, dynamic>>[], 'publicHolidayDates': <String>[]};
+      return {'records': <Map<String, dynamic>>[], 'publicHolidayDates': <String>[], 'summary': <String, dynamic>{}};
     }
   }
 
