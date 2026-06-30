@@ -102,7 +102,7 @@ class _SendNotificationScreenState extends State<SendNotificationScreen> {
         title: 'Send Notification',
         actions: [
           _loadingHistory
-              ? const Padding(padding: EdgeInsets.all(14), child: SizedBox(width: 18, height: 18,
+              ? Padding(padding: const EdgeInsets.all(14), child: SizedBox(width: 18, height: 18,
                   child: CircularProgressIndicator(color: AppTheme.textSecondary, strokeWidth: 2)))
               : TextButton.icon(
                   onPressed: _showHistory ? () => setState(() => _showHistory = false) : _loadHistory,

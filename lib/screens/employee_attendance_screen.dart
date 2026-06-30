@@ -636,12 +636,18 @@ class _LeaveRequestsTabState extends State<_LeaveRequestsTab> {
   final _fromCtrl = TextEditingController();
   final _toCtrl = TextEditingController();
   final _reasonCtrl = TextEditingController();
+  DateTime? _fromDate;
+  DateTime? _toDate;
   bool _submitting = false;
   String _filterStatus = 'all';
   List<Map<String, dynamic>> _leaves = [];
   bool _loading = false;
 
   final _leaveTypes = ['Casual Leave', 'Sick Leave', 'Emergency Leave', 'Annual Leave', 'Half Day'];
+  static const _leaveTypeApi = {
+    'Casual Leave': 'casual', 'Sick Leave': 'sick', 'Emergency Leave': 'emergency',
+    'Annual Leave': 'annual', 'Half Day': 'other',
+  };
 
   @override
   void initState() {
@@ -664,19 +670,22 @@ class _LeaveRequestsTabState extends State<_LeaveRequestsTab> {
   }
 
   Future<void> _submit() async {
-    if (_fromCtrl.text.isEmpty || _toCtrl.text.isEmpty || _reasonCtrl.text.isEmpty) {
+    if (_fromDate == null || _toDate == null || _reasonCtrl.text.isEmpty) {
       _snack('All fields are required', Colors.red);
       return;
     }
     setState(() => _submitting = true);
     try {
+      final isoFrom = '${_fromDate!.year}-${_fromDate!.month.toString().padLeft(2,'0')}-${_fromDate!.day.toString().padLeft(2,'0')}';
+      final isoTo   = '${_toDate!.year}-${_toDate!.month.toString().padLeft(2,'0')}-${_toDate!.day.toString().padLeft(2,'0')}';
       await ApiService().submitLeaveRequest({
-        'leaveType': _leaveType,
-        'from': _fromCtrl.text,
-        'to': _toCtrl.text,
+        'leaveType': _leaveTypeApi[_leaveType] ?? 'casual',
+        'startDate': isoFrom,
+        'endDate': isoTo,
         'reason': _reasonCtrl.text,
       });
       _fromCtrl.clear(); _toCtrl.clear(); _reasonCtrl.clear();
+      setState(() { _fromDate = null; _toDate = null; });
       _snack('Leave request submitted', Colors.green);
       _loadLeaves();
     } catch (e) {
@@ -692,7 +701,7 @@ class _LeaveRequestsTabState extends State<_LeaveRequestsTab> {
     );
   }
 
-  Future<void> _pickDate(TextEditingController ctrl) async {
+  Future<void> _pickDate(TextEditingController ctrl, bool isFrom) async {
     final d = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
@@ -701,6 +710,7 @@ class _LeaveRequestsTabState extends State<_LeaveRequestsTab> {
     );
     if (d != null) {
       ctrl.text = '${d.month.toString().padLeft(2,'0')}/${d.day.toString().padLeft(2,'0')}/${d.year}';
+      setState(() { if (isFrom) _fromDate = d; else _toDate = d; });
     }
   }
 
@@ -753,7 +763,7 @@ class _LeaveRequestsTabState extends State<_LeaveRequestsTab> {
                         readOnly: true,
                         style: const TextStyle(color: Color(0xFF111827), fontSize: 13),
                         decoration: _inputDeco('mm/dd/yyyy', suffix: const Icon(Icons.calendar_today_outlined, size: 16, color: Color(0xFF9CA3AF))),
-                        onTap: () => _pickDate(_fromCtrl),
+                        onTap: () => _pickDate(_fromCtrl, true),
                       ),
                     ])),
                     const SizedBox(width: 10),
@@ -765,7 +775,7 @@ class _LeaveRequestsTabState extends State<_LeaveRequestsTab> {
                         readOnly: true,
                         style: const TextStyle(color: Color(0xFF111827), fontSize: 13),
                         decoration: _inputDeco('mm/dd/yyyy', suffix: const Icon(Icons.calendar_today_outlined, size: 16, color: Color(0xFF9CA3AF))),
-                        onTap: () => _pickDate(_toCtrl),
+                        onTap: () => _pickDate(_toCtrl, false),
                       ),
                     ])),
                   ],

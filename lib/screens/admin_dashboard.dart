@@ -292,7 +292,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
               final r = _recent[i];
               final userId = (r['userId'] ?? (r['user'] is String ? r['user'] : (r['user'] is Map ? (r['user']?['id'] ?? r['user']?['_id']) : null)) ?? '').toString();
               final emp = _empById[userId] ?? {};
-              final name = '${r['firstName'] ?? (r['user'] is Map ? r['user']?['firstName'] : null) ?? emp['firstName'] ?? ''} ${r['lastName'] ?? (r['user'] is Map ? r['user']?['lastName'] : null) ?? emp['lastName'] ?? ''}'.trim();
+              final userMap = r['user'] is Map ? r['user'] as Map : null;
+              final name = '${r['firstName'] ?? userMap?['firstName'] ?? emp['firstName'] ?? ''} ${r['lastName'] ?? userMap?['lastName'] ?? emp['lastName'] ?? ''}'.trim();
               final status = r['status'] ?? 'present';
               final checkIn = r['checkIn'] ?? r['checkInTime'] ?? '';
               return Column(
