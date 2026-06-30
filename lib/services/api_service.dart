@@ -702,6 +702,16 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> getMyLiveFines({required String month}) async {
+    try {
+      final response = await _dio.get('/payroll/me/live-fines', queryParameters: {'month': month});
+      final data = response.data['data'];
+      return data is Map<String, dynamic> ? data : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
   Future<Map<String, dynamic>> getMyAttendanceHistory({int? month, int? year}) async {
     try {
       final params = <String, String>{};

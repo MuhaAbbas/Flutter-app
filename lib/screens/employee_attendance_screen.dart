@@ -73,6 +73,8 @@ class _MyCalendarTabState extends State<_MyCalendarTab> {
   Map<String, dynamic> _stats = {};
   List<Map<String, dynamic>> _records = [];
   List<String> _publicHolidayDates = [];
+  double _lateFine = 0.0;
+  double _absentFine = 0.0;
   bool _loading = false;
 
   @override
@@ -83,11 +85,19 @@ class _MyCalendarTabState extends State<_MyCalendarTab> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final historyData = await ApiService().getMyAttendanceHistory(month: _month.month, year: _month.year);
+    final monthStr = '${_month.year}-${_month.month.toString().padLeft(2, '0')}';
+    final results = await Future.wait([
+      ApiService().getMyAttendanceHistory(month: _month.month, year: _month.year),
+      ApiService().getMyLiveFines(month: monthStr),
+    ]);
+    final historyData = results[0] as Map<String, dynamic>;
+    final fineData = results[1] as Map<String, dynamic>;
     setState(() {
       _records = historyData['records'] as List<Map<String, dynamic>>;
       _publicHolidayDates = (historyData['publicHolidayDates'] as List).cast<String>();
       _stats = historyData['summary'] as Map<String, dynamic>;
+      _lateFine = (fineData['lateFine'] ?? 0.0).toDouble();
+      _absentFine = (fineData['absentFine'] ?? 0.0).toDouble();
       _loading = false;
     });
   }
@@ -114,8 +124,8 @@ class _MyCalendarTabState extends State<_MyCalendarTab> {
     final workingMins = _stats['totalMinutes'] ?? _stats['workingMinutes'] ?? 0;
     final wh = workingMins ~/ 60;
     final wm = workingMins % 60;
-    final lateFine = (_stats['lateFine'] ?? 0.0).toDouble();
-    final absentFine = (_stats['absentFine'] ?? 0.0).toDouble();
+    final lateFine = _lateFine;
+    final absentFine = _absentFine;
 
     final presentDates = <int>{};
     final lateDates = <int>{};
