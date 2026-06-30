@@ -38,7 +38,8 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
     setState(() {
       _todayAttendance = results[0] as AttendanceRecord?;
       _stats = results[1] as Map<String, dynamic>;
-      final raw = results[2] as List<Map<String, dynamic>>;
+      final historyData = results[2] as Map<String, dynamic>;
+      final raw = historyData['records'] as List<Map<String, dynamic>>;
       _recentAttendance = raw.take(5).toList();
       _loading = false;
     });

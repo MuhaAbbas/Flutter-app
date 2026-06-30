@@ -72,6 +72,7 @@ class _MyCalendarTabState extends State<_MyCalendarTab> {
   DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
   Map<String, dynamic> _stats = {};
   List<Map<String, dynamic>> _records = [];
+  List<String> _publicHolidayDates = [];
   bool _loading = false;
 
   @override
@@ -88,7 +89,9 @@ class _MyCalendarTabState extends State<_MyCalendarTab> {
     ]);
     setState(() {
       _stats = results[0] as Map<String, dynamic>;
-      _records = results[1] as List<Map<String, dynamic>>;
+      final historyData = results[1] as Map<String, dynamic>;
+      _records = historyData['records'] as List<Map<String, dynamic>>;
+      _publicHolidayDates = (historyData['publicHolidayDates'] as List).cast<String>();
       _loading = false;
     });
   }
@@ -121,6 +124,7 @@ class _MyCalendarTabState extends State<_MyCalendarTab> {
     final presentDates = <int>{};
     final lateDates = <int>{};
     final absentDates = <int>{};
+    final holidayDates = <int>{};
     for (final r in _records) {
       final dateStr = r['date'] ?? r['checkIn'] ?? '';
       try {
@@ -130,6 +134,15 @@ class _MyCalendarTabState extends State<_MyCalendarTab> {
           if (status == 'late') lateDates.add(d.day);
           else if (status == 'absent') absentDates.add(d.day);
           else presentDates.add(d.day);
+        }
+      } catch (_) {}
+    }
+    for (final dateStr in _publicHolidayDates) {
+      try {
+        final d = DateTime.parse(dateStr);
+        if (d.month == _month.month && d.year == _month.year) {
+          holidayDates.add(d.day);
+          absentDates.remove(d.day);
         }
       } catch (_) {}
     }
@@ -222,7 +235,20 @@ class _MyCalendarTabState extends State<_MyCalendarTab> {
                         .toList(),
                   ),
                   const SizedBox(height: 8),
-                  _buildCalendarDays(presentDates, lateDates, absentDates),
+                  _buildCalendarDays(presentDates, lateDates, absentDates, holidayDates),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _legendDot(const Color(0xFF059669), 'Present'),
+                      const SizedBox(width: 14),
+                      _legendDot(const Color(0xFFF59E0B), 'Late'),
+                      const SizedBox(width: 14),
+                      _legendDot(const Color(0xFFEF4444), 'Absent'),
+                      const SizedBox(width: 14),
+                      _legendDot(const Color(0xFF8B5CF6), 'Holiday'),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -233,7 +259,7 @@ class _MyCalendarTabState extends State<_MyCalendarTab> {
     );
   }
 
-  Widget _buildCalendarDays(Set<int> present, Set<int> late, Set<int> absent) {
+  Widget _buildCalendarDays(Set<int> present, Set<int> late, Set<int> absent, Set<int> holidays) {
     final firstDay = DateTime(_month.year, _month.month, 1);
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
     final startOffset = firstDay.weekday % 7; // Sunday = 0
@@ -249,6 +275,7 @@ class _MyCalendarTabState extends State<_MyCalendarTab> {
       final isPresent = present.contains(d);
       final isLate = late.contains(d);
       final isAbsent = absent.contains(d);
+      final isHoliday = holidays.contains(d);
       final isFuture = isCurrentMonth ? d > today.day : _month.isAfter(today);
 
       Color dotColor = Colors.transparent;
@@ -256,6 +283,7 @@ class _MyCalendarTabState extends State<_MyCalendarTab> {
       if (isPresent) dotColor = const Color(0xFF059669);
       if (isLate) dotColor = const Color(0xFFF59E0B);
       if (isAbsent) dotColor = const Color(0xFFEF4444);
+      if (isHoliday) dotColor = const Color(0xFF8B5CF6);
 
       cells.add(Container(
         height: 40,
@@ -291,6 +319,14 @@ class _MyCalendarTabState extends State<_MyCalendarTab> {
       if (i + 7 < cells.length) rows.add(const SizedBox(height: 4));
     }
     return Column(children: rows);
+  }
+
+  Widget _legendDot(Color color, String label) {
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+      const SizedBox(width: 4),
+      Text(label, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 10)),
+    ]);
   }
 
   Widget _statBox(String value, String label, Color textColor, Color bg) {

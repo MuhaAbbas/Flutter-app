@@ -702,17 +702,21 @@ class ApiService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getMyAttendanceHistory({int? month, int? year}) async {
+  Future<Map<String, dynamic>> getMyAttendanceHistory({int? month, int? year}) async {
     try {
       final params = <String, String>{};
       if (month != null) params['month'] = month.toString();
       if (year != null) params['year'] = year.toString();
       final response = await _dio.get('/attendance/my', queryParameters: params);
       final data = response.data['data'];
-      final List list = data is List ? data : (data?['records'] ?? data?['items'] ?? []);
-      return list.cast<Map<String, dynamic>>();
+      final List recordList = data is List ? data : (data?['records'] ?? data?['items'] ?? []);
+      final List holidayList = data is Map ? (data['publicHolidayDates'] ?? []) : [];
+      return {
+        'records': recordList.cast<Map<String, dynamic>>(),
+        'publicHolidayDates': holidayList.cast<String>(),
+      };
     } catch (_) {
-      return [];
+      return {'records': <Map<String, dynamic>>[], 'publicHolidayDates': <String>[]};
     }
   }
 
