@@ -8,6 +8,8 @@ class ApiConfig {
 
   static String visitStart(String meetingId) => '/visits/$meetingId/start';
   static String visitEnd(String meetingId) => '/visits/$meetingId/end';
+  static String visitMeetingStart(String meetingId) => '/visits/$meetingId/meeting-start';
+  static String visitMeetingEnd(String meetingId) => '/visits/$meetingId/meeting-end';
   static String visitLocation(String meetingId) => '/visits/$meetingId/location';
   static String visitDetail(String meetingId) => '/visits/$meetingId';
 

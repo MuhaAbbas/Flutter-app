@@ -76,6 +76,34 @@ class _ActiveVisitScreenState extends State<ActiveVisitScreen> {
     }
   }
 
+  Future<void> _startMeeting() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final pos = await LocationService().getCurrentPosition();
+      if (pos == null) throw Exception('GPS location nahi mili. Location on karo.');
+      final tracking = await ApiService().startMeeting(widget.meeting.id, pos.latitude, pos.longitude);
+      setState(() { _tracking = tracking; _currentPosition = pos; });
+    } catch (e) {
+      setState(() { _error = e.toString().replaceFirst('Exception: ', ''); });
+    } finally {
+      setState(() { _loading = false; });
+    }
+  }
+
+  Future<void> _endMeeting() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final pos = await LocationService().getCurrentPosition();
+      if (pos == null) throw Exception('GPS location nahi mili.');
+      final tracking = await ApiService().endMeeting(widget.meeting.id, pos.latitude, pos.longitude);
+      setState(() { _tracking = tracking; _currentPosition = pos; });
+    } catch (e) {
+      setState(() { _error = e.toString().replaceFirst('Exception: ', ''); });
+    } finally {
+      setState(() { _loading = false; });
+    }
+  }
+
   Future<void> _endVisit() async {
     final confirm = await _showConfirmDialog();
     if (!confirm) return;
@@ -328,31 +356,59 @@ class _ActiveVisitScreenState extends State<ActiveVisitScreen> {
   }
 
   Widget _buildActionButton() {
-    if (_visitStarted) {
+    final status = _tracking?.status ?? '';
+    final spinner = SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2));
+    final btnShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
+    const pad = EdgeInsets.symmetric(vertical: 18);
+    const txtStyle = TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold);
+
+    // Step 2: traveling → arrived at client → Start Meeting (blue)
+    if (status == 'started') {
       return ElevatedButton.icon(
-        onPressed: _loading ? null : _endVisit,
-        icon: _loading
-            ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : const Icon(Icons.stop_circle_outlined, color: Colors.white),
-        label: Text(_loading ? 'Ending...' : 'End Visit', style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
+        onPressed: _loading ? null : _startMeeting,
+        icon: _loading ? spinner : const Icon(Icons.people_outline, color: Colors.white),
+        label: Text(_loading ? 'Starting...' : 'Start Meeting', style: txtStyle),
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.red,
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          backgroundColor: const Color(0xFF3B82F6),
+          padding: pad, shape: btnShape,
         ),
       );
     }
 
+    // Step 3: meeting in progress → End Meeting (blue)
+    if (status == 'meeting_started') {
+      return ElevatedButton.icon(
+        onPressed: _loading ? null : _endMeeting,
+        icon: _loading ? spinner : const Icon(Icons.meeting_room_outlined, color: Colors.white),
+        label: Text(_loading ? 'Ending...' : 'End Meeting', style: txtStyle),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF3B82F6),
+          padding: pad, shape: btnShape,
+        ),
+      );
+    }
+
+    // Step 4: meeting done → End Visit (red)
+    if (status == 'meeting_ended' || status == 'traveling_next') {
+      return ElevatedButton.icon(
+        onPressed: _loading ? null : _endVisit,
+        icon: _loading ? spinner : const Icon(Icons.stop_circle_outlined, color: Colors.white),
+        label: Text(_loading ? 'Ending...' : 'End Visit', style: txtStyle),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.red,
+          padding: pad, shape: btnShape,
+        ),
+      );
+    }
+
+    // Step 1: not started → Start Visit (green)
     return ElevatedButton.icon(
       onPressed: _loading ? null : _startVisit,
-      icon: _loading
-          ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-          : const Icon(Icons.play_circle_outlined, color: Colors.white),
-      label: Text(_loading ? 'Starting...' : 'Start Visit', style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
+      icon: _loading ? spinner : const Icon(Icons.play_circle_outlined, color: Colors.white),
+      label: Text(_loading ? 'Starting...' : 'Start Visit', style: txtStyle),
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFF22C55E),
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: pad, shape: btnShape,
       ),
     );
   }

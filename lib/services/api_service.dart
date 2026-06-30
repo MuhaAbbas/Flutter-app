@@ -76,6 +76,18 @@ class ApiService {
     }
   }
 
+  Future<VisitTracking> startMeeting(String meetingId, double lat, double lng) async {
+    final response = await _dio.post(ApiConfig.visitMeetingStart(meetingId),
+        data: {'latitude': lat, 'longitude': lng});
+    return VisitTracking.fromJson(response.data['data'] ?? response.data);
+  }
+
+  Future<VisitTracking> endMeeting(String meetingId, double lat, double lng) async {
+    final response = await _dio.post(ApiConfig.visitMeetingEnd(meetingId),
+        data: {'latitude': lat, 'longitude': lng});
+    return VisitTracking.fromJson(response.data['data'] ?? response.data);
+  }
+
   Future<VisitTracking> startVisit(String meetingId, double lat, double lng) async {
     try {
       final response = await _dio.post(ApiConfig.visitStart(meetingId),
